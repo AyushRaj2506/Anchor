@@ -5,44 +5,21 @@ import './DeadlineList.css';
  * Mock deadline data.
  * priority can be: 'high' | 'medium' | 'low'
  */
-const DEADLINES = [
-  {
-    id: 1,
-    month: 'MAY',
-    day: '15',
-    title: 'DBMS Assignment',
-    remaining: 'Tomorrow, 11:59 PM',
-    priority: 'high',
-    remainingColor: '#c0392b', // red = urgent
-  },
-  {
-    id: 2,
-    month: 'MAY',
-    day: '17',
-    title: 'OS Lab Record',
-    remaining: '2 days left',
-    priority: 'medium',
-    remainingColor: '#c97b5a', // terracotta = moderate
-  },
-  {
-    id: 3,
-    month: 'MAY',
-    day: '20',
-    title: 'AI Project Report',
-    remaining: '5 days left',
-    priority: 'medium',
-    remainingColor: '#888',
-  },
-  {
-    id: 4,
-    month: 'MAY',
-    day: '25',
-    title: 'CN Presentation',
-    remaining: '10 days left',
-    priority: 'low',
-    remainingColor: '#888',
-  },
-];
+function getRemaining(deadlineMs) {
+  const now = Date.now();
+  const diff = deadlineMs - now;
+  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+  if (days < 0) return 'Overdue';
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return `${days} days left`;
+}
+
+function getRemainingColor(days) {
+  if (days <= 1) return '#c0392b';
+  if (days <= 3) return '#c97b5a';
+  return '#888';
+}
 
 /** Map priority to a badge label + CSS class */
 const PRIORITY_BADGE = {
@@ -51,7 +28,25 @@ const PRIORITY_BADGE = {
   low:    { label: 'Low',    className: 'badge--low' },
 };
 
-function DeadlineList() {
+function DeadlineList({ tasks = [] }) {
+  const upcoming = tasks
+    .filter(t => t.deadlineMs && t.status !== 'completed')
+    .sort((a, b) => a.deadlineMs - b.deadlineMs)
+    .slice(0, 4)
+    .map(t => {
+      const date = new Date(t.deadlineMs);
+      const diff = t.deadlineMs - Date.now();
+      const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      return {
+        id: t.id,
+        month: date.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+        day: date.getDate().toString(),
+        title: t.title,
+        remaining: getRemaining(t.deadlineMs),
+        priority: t.priority?.toLowerCase() || 'low',
+        remainingColor: getRemainingColor(days)
+      };
+    });
   return (
     <div className="card deadline-card">
       <div className="card-header">
@@ -62,7 +57,9 @@ function DeadlineList() {
       </div>
 
       <ul className="deadline-list" role="list" aria-label="Upcoming deadlines">
-        {DEADLINES.map((d) => {
+        {upcoming.length === 0 ? (
+           <p style={{ color: 'var(--text-secondary)', padding: '1rem', textAlign: 'center' }}>No upcoming deadlines.</p>
+        ) : upcoming.map((d) => {
           const badge = PRIORITY_BADGE[d.priority];
           return (
             <li key={d.id} className="deadline-item">

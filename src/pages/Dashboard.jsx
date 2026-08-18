@@ -25,8 +25,14 @@ function getGreeting() {
 const STAGGER_BASE  = 40;
 const STAGGER_STEP  = 55;
 
-function Dashboard() {
+function Dashboard({ tasks = [] }) {
   const greeting = getGreeting();
+
+  const pendingTasks = tasks.filter(t => t.status === 'todo' || t.status === 'inprogress').length;
+  const inProgressTasks = tasks.filter(t => t.status === 'inprogress').length;
+
+  const activeDeadlines = tasks.filter(t => t.deadlineMs && t.status !== 'completed').sort((a, b) => a.deadlineMs - b.deadlineMs);
+  const nextDeadlineTask = activeDeadlines.length > 0 ? activeDeadlines[0].title : 'None';
 
   return (
     <main className="dashboard" id="main-content" tabIndex={-1}>
@@ -65,16 +71,16 @@ function Dashboard() {
           icon="✓"
           iconBg="#fef4e0"
           label="Pending Tasks"
-          value={14}
-          sub="8 in progress"
+          value={pendingTasks}
+          sub={`${inProgressTasks} in progress`}
           subColor="var(--color-accent)"
         />
         <StatCard
           icon="📅"
           iconBg="#fde8e0"
           label="Upcoming Deadlines"
-          value={7}
-          sub="Next: DBMS Assignment"
+          value={activeDeadlines.length}
+          sub={`Next: ${nextDeadlineTask}`}
           subColor="var(--color-danger)"
         />
       </section>
@@ -89,7 +95,7 @@ function Dashboard() {
           <ResourceList />
         </div>
         <div className="dashboard-grid-right">
-          <DeadlineList />
+          <DeadlineList tasks={tasks} />
         </div>
       </section>
 
@@ -100,7 +106,7 @@ function Dashboard() {
         aria-label="Tasks and knowledge summary"
       >
         <div className="dashboard-bottom-left">
-          <TaskOverview />
+          <TaskOverview tasks={tasks} />
         </div>
         <div className="dashboard-bottom-right">
           <KnowledgeCard />

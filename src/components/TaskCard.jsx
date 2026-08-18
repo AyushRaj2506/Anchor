@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bookmark, MoreHorizontal, Check, Folder, Calendar } from 'lucide-react';
+import { Bookmark, Trash2, Check, Folder, Calendar } from 'lucide-react';
 import './TaskCard.css';
 
 /**
@@ -15,9 +15,9 @@ const PRIORITY_CLASS = {
   Low:    'tc-badge--low',
 };
 
-function TaskCard({ task }) {
+function TaskCard({ task, onUpdateStatus, onDelete }) {
   const {
-    title, category, status,
+    id, title, category, status,
     priority, deadline, completedOn, bookmarked,
   } = task;
 
@@ -30,6 +30,18 @@ function TaskCard({ task }) {
     setIsBookmarked(prev => !prev);
     setPopping(true);
     setTimeout(() => setPopping(false), 240);
+  }
+
+  function handleDelete(e) {
+    e.stopPropagation();
+    if (window.confirm(`Delete task "${title}"?`)) {
+      if (onDelete) onDelete(id);
+    }
+  }
+
+  function handleStatusChange(e) {
+    e.stopPropagation();
+    if (onUpdateStatus) onUpdateStatus(e.target.value);
   }
 
   return (
@@ -57,12 +69,23 @@ function TaskCard({ task }) {
           >
             <Bookmark size={13} strokeWidth={isBookmarked ? 2.5 : 2} fill={isBookmarked ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
+          <select 
+            value={status} 
+            onChange={handleStatusChange} 
+            onClick={e => e.stopPropagation()}
+            style={{ padding: '2px 4px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+            aria-label={`Change status for ${title}`}
+          >
+            <option value="todo">To Do</option>
+            <option value="inprogress">In Progress</option>
+            <option value="completed">Done</option>
+          </select>
           <button
             className="tc-btn tc-more"
-            aria-label={`More options for ${title}`}
-            onClick={(e) => e.stopPropagation()}
+            aria-label={`Delete task ${title}`}
+            onClick={handleDelete}
           >
-            <MoreHorizontal size={13} strokeWidth={2} aria-hidden="true" />
+            <Trash2 size={13} strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
       </div>

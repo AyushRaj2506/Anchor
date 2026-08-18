@@ -9,13 +9,7 @@ import './TaskOverview.css';
  * Respects prefers-reduced-motion by skipping the animation.
  */
 
-const TASKS = [
-  { label: 'To Do',       count: 7,  color: '#7faa7f' }, // sage green
-  { label: 'In Progress', count: 4,  color: '#c97b5a' }, // terracotta
-  { label: 'Completed',   count: 3,  color: '#b0bec5' }, // muted grey-blue
-];
 
-const TOTAL = TASKS.reduce((sum, t) => sum + t.count, 0);
 
 // Build conic-gradient string from task array, scaled by `progress` (0–1)
 function buildGradient(tasks, total, progress) {
@@ -37,11 +31,22 @@ function buildGradient(tasks, total, progress) {
   return `conic-gradient(${parts.join(', ')})`;
 }
 
-function TaskOverview() {
+function TaskOverview({ tasks = [] }) {
   const [progress, setProgress] = useState(0);
   const rafRef   = useRef(null);
   const startRef = useRef(null);
   const DURATION = 800; // ms
+
+  const todo = tasks.filter(t => t.status === 'todo').length;
+  const inprogress = tasks.filter(t => t.status === 'inprogress').length;
+  const completed = tasks.filter(t => t.status === 'completed').length;
+  const total = tasks.length;
+
+  const breakdown = [
+    { label: 'To Do',       count: todo,  color: '#7faa7f' },
+    { label: 'In Progress', count: inprogress,  color: '#c97b5a' },
+    { label: 'Completed',   count: completed,  color: '#b0bec5' },
+  ];
 
   useEffect(() => {
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -68,7 +73,7 @@ function TaskOverview() {
     };
   }, []);
 
-  const gradient = buildGradient(TASKS, TOTAL, progress);
+  const gradient = buildGradient(breakdown, total || 1, progress);
 
   return (
     <div className="card task-overview-card">
@@ -84,14 +89,14 @@ function TaskOverview() {
             style={{ background: gradient }}
           />
           <div className="donut-hole">
-            <span className="donut-total">{TOTAL}</span>
+            <span className="donut-total">{total}</span>
             <span className="donut-total-label">Total</span>
           </div>
         </div>
 
         {/* Legend */}
         <ul className="task-legend" role="list" aria-label="Task breakdown">
-          {TASKS.map((t) => (
+          {breakdown.map((t) => (
             <li key={t.label} className="task-legend-item">
               <span
                 className="task-legend-dot"

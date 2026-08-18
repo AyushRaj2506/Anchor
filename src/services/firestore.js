@@ -81,3 +81,51 @@ export async function deleteResource(userId, resourceId) {
   const docRef = doc(db, 'users', userId, 'resources', resourceId);
   await deleteDoc(docRef);
 }
+
+/**
+ * Fetch all tasks for a user.
+ */
+export async function getTasks(userId) {
+  const colRef = getTasksColRef(userId);
+  const q = query(colRef, orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  
+  return snapshot.docs.map(docSnap => ({
+    id: docSnap.id,
+    ...docSnap.data()
+  }));
+}
+
+/**
+ * Add a new task for a user.
+ */
+export async function addTask(userId, taskData) {
+  const colRef = getTasksColRef(userId);
+  const docRef = await addDoc(colRef, {
+    ...taskData,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+  return docRef.id;
+}
+
+/**
+ * Update a specific task.
+ */
+export async function updateTask(userId, taskId, updates) {
+  if (!userId || !taskId) throw new Error('userId and taskId are required');
+  const docRef = doc(db, 'users', userId, 'tasks', taskId);
+  await updateDoc(docRef, {
+    ...updates,
+    updatedAt: serverTimestamp()
+  });
+}
+
+/**
+ * Delete a specific task.
+ */
+export async function deleteTask(userId, taskId) {
+  if (!userId || !taskId) throw new Error('userId and taskId are required');
+  const docRef = doc(db, 'users', userId, 'tasks', taskId);
+  await deleteDoc(docRef);
+}

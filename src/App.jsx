@@ -11,9 +11,10 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DemoAccount from './pages/DemoAccount';
 import { LIBRARY_RESOURCES } from './data/libraryData';
+import { TASKS } from './data/taskData';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './config/firebase';
-import { getResources, addResource, updateResource, deleteResource } from './services/firestore';
+import { getResources, addResource, updateResource, deleteResource, getTasks, addTask, updateTask, deleteTask } from './services/firestore';
 import './App.css';
 
 /**
@@ -48,6 +49,8 @@ function App() {
   const [selectedResource, setSelectedResource] = useState(null);
   const [resources, setResources]             = useState([]);
   const [loadingResources, setLoadingResources] = useState(false);
+  const [tasks, setTasks]                     = useState([]);
+  const [loadingTasks, setLoadingTasks]       = useState(false);
   const [loadingAuth, setLoadingAuth]         = useState(true);
 
   // ── Firebase Auth Listener ──
@@ -114,6 +117,34 @@ function App() {
     }
 
     loadFirestoreResources();
+  }, [user]);
+
+  // ── Firestore Tasks Synchronization ──
+  useEffect(() => {
+    if (!user) {
+      setTasks([]);
+      return;
+    }
+    
+    if (user.isDemo) {
+      setTasks(TASKS);
+      return;
+    }
+
+    async function loadFirestoreTasks() {
+      setLoadingTasks(true);
+      try {
+        const data = await getTasks(user.uid);
+        setTasks(data);
+      } catch (err) {
+        console.error('Failed to load tasks:', err);
+        setTasks(TASKS); // Fallback to mock data for display
+      } finally {
+        setLoadingTasks(false);
+      }
+    }
+
+    loadFirestoreTasks();
   }, [user]);
 
   function handleToggleTheme() {
@@ -217,11 +248,54 @@ function App() {
     }
   }
 
+  // ── Task Handlers ──
+  async function handleAddTask(newTask) {
+    if (user && !user.isDemo) {
+      try {
+        const id = await addTask(user.uid, newTask);
+        setTasks(prev => [{ id, ...newTask }, ...prev]);
+      } catch (err) {
+        console.error('Failed to add task:', err);
+        alert('Failed to add task. Please try again.');
+      }
+    } else {
+      const id = Date.now().toString();
+      setTasks(prev => [{ id, ...newTask }, ...prev]);
+    }
+  }
+
+  async function handleUpdateTask(taskId, updates) {
+    // Optimistic UI update
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+    
+    if (user && !user.isDemo) {
+      try {
+        await updateTask(user.uid, taskId, updates);
+      } catch (err) {
+        console.error('Failed to update task:', err);
+      }
+    }
+  }
+
+  async function handleDeleteTask(taskId) {
+    if (user && !user.isDemo) {
+      try {
+        await deleteTask(user.uid, taskId);
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+      } catch (err) {
+        console.error('Failed to delete task:', err);
+        alert('Failed to delete task. Please try again.');
+      }
+    } else {
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    }
+  }
+
   // Render the correct authenticated page component
   function renderPage() {
     switch (activePage) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard tasks={tasks} />;
       case 'library':
         return (
           <Library
@@ -234,7 +308,15 @@ function App() {
           />
         );
       case 'tasks':
-        return <Tasks />;
+        return (
+          <Tasks 
+            tasks={tasks} 
+            loading={loadingTasks} 
+            onAddTask={handleAddTask} 
+            onUpdateTask={handleUpdateTask} 
+            onDeleteTask={handleDeleteTask} 
+          />
+        );
       case 'ask':
         return <AskMyKnowledge onOpenResource={handleOpenResource} />;
       case 'bookmarks':
