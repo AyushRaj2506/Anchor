@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bookmark, MoreHorizontal } from 'lucide-react';
+import { Bookmark, Trash2 } from 'lucide-react';
 import './ResourceCard.css';
 
 /**
@@ -11,9 +11,9 @@ import './ResourceCard.css';
  *              (does NOT fire when bookmark or more-options buttons are clicked)
  *
  * Shows: type icon, title, category, type label, relative time, tags,
- *        bookmark button, more-options button.
+ *        bookmark button, delete button.
  */
-function ResourceCard({ resource, onOpen, onBookmarkToggle }) {
+function ResourceCard({ resource, onOpen, onBookmarkToggle, onDelete }) {
   const { id, title, category, type, typeIcon, iconBg, time, tags, bookmarked } = resource;
   const [popping, setPopping] = useState(false);
 
@@ -33,6 +33,13 @@ function ResourceCard({ resource, onOpen, onBookmarkToggle }) {
     setPopping(true);
     setTimeout(() => setPopping(false), 240);
     if (onBookmarkToggle) onBookmarkToggle(id);
+  }
+
+  function handleDelete(e) {
+    e.stopPropagation();
+    if (window.confirm(`Delete "${title}"?`)) {
+      if (onDelete) onDelete(id);
+    }
   }
 
   return (
@@ -92,10 +99,10 @@ function ResourceCard({ resource, onOpen, onBookmarkToggle }) {
         </button>
         <button
           className="rc-btn rc-more"
-          aria-label={`More options for ${title}`}
-          onClick={(e) => e.stopPropagation()}
+          aria-label={`Delete ${title}`}
+          onClick={handleDelete}
         >
-          <MoreHorizontal size={15} strokeWidth={2} aria-hidden="true" />
+          <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
     </li>

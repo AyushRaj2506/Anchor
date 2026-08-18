@@ -13,6 +13,7 @@ import DemoAccount from './pages/DemoAccount';
 import { LIBRARY_RESOURCES } from './data/libraryData';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './config/firebase';
+import { getResources, addResource, updateResource, deleteResource } from './services/firestore';
 import './App.css';
 
 /**
@@ -45,7 +46,8 @@ function App() {
   const [activePage, setActivePage]           = useState('dashboard');
   const [sidebarOpen, setSidebarOpen]         = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
-  const [resources, setResources]             = useState(LIBRARY_RESOURCES);
+  const [resources, setResources]             = useState([]);
+  const [loadingResources, setLoadingResources] = useState(false);
   const [loadingAuth, setLoadingAuth]         = useState(true);
 
   // ── Firebase Auth Listener ──
@@ -83,6 +85,36 @@ function App() {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('anchor-theme', theme);
   }, [theme]);
+
+  // ── Firestore Resources Synchronization ──
+  useEffect(() => {
+    if (!user) {
+      setResources([]);
+      return;
+    }
+    
+    if (user.isDemo) {
+      setResources(LIBRARY_RESOURCES);
+      return;
+    }
+
+    async function loadFirestoreResources() {
+      setLoadingResources(true);
+      try {
+        const data = await getResources(user.uid);
+        // data comes back sorted newest-first due to orderBy in service
+        setResources(data);
+      } catch (err) {
+        console.error('Failed to load resources:', err);
+        // Fallback to mock data for display if network/permissions fail
+        setResources(LIBRARY_RESOURCES);
+      } finally {
+        setLoadingResources(false);
+      }
+    }
+
+    loadFirestoreResources();
+  }, [user]);
 
   function handleToggleTheme() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
@@ -133,10 +165,56 @@ function App() {
     setSidebarOpen(false);
   }
 
-  function handleToggleBookmark(resourceId) {
+  async function handleToggleBookmark(resourceId) {
+    const target = resources.find(r => r.id === resourceId);
+    if (!target) return;
+
+    // Optimistic UI update
     setResources((prev) =>
       prev.map((r) => (r.id === resourceId ? { ...r, bookmarked: !r.bookmarked } : r))
     );
+
+    if (user && !user.isDemo) {
+      try {
+        await updateResource(user.uid, resourceId, { bookmarked: !target.bookmarked });
+      } catch (err) {
+        console.error('Failed to update bookmark in Firestore:', err);
+        // Revert on failure
+        setResources((prev) =>
+          prev.map((r) => (r.id === resourceId ? { ...r, bookmarked: target.bookmarked } : r))
+        );
+      }
+    }
+  }
+
+  async function handleAddResource(newResource) {
+    if (user && !user.isDemo) {
+      try {
+        const id = await addResource(user.uid, newResource);
+        setResources(prev => [{ id, ...newResource, time: 'Just now' }, ...prev]);
+      } catch (err) {
+        console.error('Failed to add resource:', err);
+        alert('Failed to add resource. Please try again.');
+      }
+    } else {
+      // Demo mode
+      const id = Date.now().toString();
+      setResources(prev => [{ id, ...newResource, time: 'Just now' }, ...prev]);
+    }
+  }
+
+  async function handleDeleteResource(resourceId) {
+    if (user && !user.isDemo) {
+      try {
+        await deleteResource(user.uid, resourceId);
+        setResources(prev => prev.filter(r => r.id !== resourceId));
+      } catch (err) {
+        console.error('Failed to delete resource:', err);
+        alert('Failed to delete resource. Please try again.');
+      }
+    } else {
+      setResources(prev => prev.filter(r => r.id !== resourceId));
+    }
   }
 
   // Render the correct authenticated page component
@@ -148,8 +226,11 @@ function App() {
         return (
           <Library
             resources={resources}
+            loading={loadingResources}
             onOpenResource={handleOpenResource}
             onToggleBookmark={handleToggleBookmark}
+            onAddResource={handleAddResource}
+            onDeleteResource={handleDeleteResource}
           />
         );
       case 'tasks':
@@ -163,6 +244,7 @@ function App() {
             onToggleBookmark={handleToggleBookmark}
             onOpenResource={handleOpenResource}
             onNavigateToLibrary={() => handleNavigate('library')}
+            onDeleteResource={handleDeleteResource}
           />
         );
       case 'resource-details':
@@ -170,8 +252,11 @@ function App() {
           return (
             <Library
               resources={resources}
+              loading={loadingResources}
               onOpenResource={handleOpenResource}
               onToggleBookmark={handleToggleBookmark}
+              onAddResource={handleAddResource}
+              onDeleteResource={handleDeleteResource}
             />
           );
         }

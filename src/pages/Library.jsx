@@ -22,12 +22,36 @@ import './Library.css';
 
 const ITEMS_PER_PAGE = 6; // show 6 at a time; "Load more" adds 6 more
 
-function Library({ resources, onOpenResource, onToggleBookmark }) {
+function Library({ resources, loading, onOpenResource, onToggleBookmark, onAddResource, onDeleteResource }) {
   const [search, setSearch]       = useState('');
   const [category, setCategory]   = useState('all');
   const [type, setType]           = useState('all');
   const [sort, setSort]           = useState('newest');
   const [showCount, setShowCount] = useState(ITEMS_PER_PAGE);
+
+  // Modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newUrl, setNewUrl] = useState('');
+
+  function handleAddSubmit() {
+    if (!newTitle.trim()) return;
+    if (onAddResource) {
+      onAddResource({
+        title: newTitle.trim(),
+        sourceUrl: newUrl.trim() || '',
+        type: newUrl.trim() ? 'URL' : 'Document',
+        typeIcon: newUrl.trim() ? '🔗' : '📋',
+        iconBg: newUrl.trim() ? '#fef4e0' : '#ede3f5',
+        category: 'Uncategorized',
+        tags: [],
+        bookmarked: false
+      });
+    }
+    setShowAddModal(false);
+    setNewTitle('');
+    setNewUrl('');
+  }
 
   // ── Filtering + sorting ──────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -79,7 +103,7 @@ function Library({ resources, onOpenResource, onToggleBookmark }) {
           <h1 id="lib-page-title" className="lib-title">Library</h1>
           <p className="lib-subtitle">Everything you've saved, organized in one place.</p>
         </div>
-        <button className="lib-add-btn" aria-label="Add a new resource">
+        <button className="lib-add-btn" aria-label="Add a new resource" onClick={() => setShowAddModal(true)}>
           + Add Resource
         </button>
       </section>
@@ -109,7 +133,11 @@ function Library({ resources, onOpenResource, onToggleBookmark }) {
 
           {/* Resource rows */}
           <div className="card lib-list-card">
-            {visible.length === 0 ? (
+            {loading ? (
+              <div className="lib-empty" role="status" aria-live="polite">
+                <p className="lib-empty-title">Loading your resources...</p>
+              </div>
+            ) : visible.length === 0 ? (
               /* Empty state */
               <div className="lib-empty" role="status" aria-live="polite">
                 <span className="lib-empty-icon" aria-hidden="true">🔍</span>
@@ -130,6 +158,7 @@ function Library({ resources, onOpenResource, onToggleBookmark }) {
                     resource={resource}
                     onOpen={onOpenResource}
                     onBookmarkToggle={onToggleBookmark}
+                    onDelete={onDeleteResource}
                   />
                 ))}
               </ul>
@@ -183,6 +212,49 @@ function Library({ resources, onOpenResource, onToggleBookmark }) {
         </aside>
 
       </div>
+
+      {/* Add Resource Modal Overlay */}
+      {showAddModal && (
+        <div className="lib-modal-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="card" style={{ padding: '2rem', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>Add New Resource</h3>
+            <input 
+              type="text" 
+              placeholder="Resource Title" 
+              value={newTitle} 
+              onChange={e => setNewTitle(e.target.value)} 
+              style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
+              autoFocus
+            />
+            <input 
+              type="url" 
+              placeholder="URL (optional)" 
+              value={newUrl} 
+              onChange={e => setNewUrl(e.target.value)} 
+              style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddSubmit}
+                disabled={!newTitle.trim()}
+                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: !newTitle.trim() ? 0.5 : 1 }}
+              >
+                Add Resource
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
