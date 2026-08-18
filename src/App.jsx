@@ -11,6 +11,8 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DemoAccount from './pages/DemoAccount';
 import { LIBRARY_RESOURCES } from './data/libraryData';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './config/firebase';
 import './App.css';
 
 /**
@@ -44,6 +46,37 @@ function App() {
   const [sidebarOpen, setSidebarOpen]         = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
   const [resources, setResources]             = useState(LIBRARY_RESOURCES);
+  const [loadingAuth, setLoadingAuth]         = useState(true);
+
+  // ── Firebase Auth Listener ──
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+          isDemo: false
+        });
+      } else {
+        // Fallback to demo user if present
+        const saved = localStorage.getItem('anchor-user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.isDemo) {
+            setUser(parsed);
+          } else {
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      }
+      setLoadingAuth(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Apply Theme attribute dynamically on document root
   useEffect(() => {
@@ -55,25 +88,8 @@ function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }
 
-  function handleLogin(userData) {
-    const sessionUser = {
-      ...userData,
-      isDemo: false,
-    };
-    setUser(sessionUser);
-    localStorage.setItem('anchor-user', JSON.stringify(sessionUser));
-    setActivePage('dashboard');
-  }
-
-  function handleSignup(userData) {
-    const sessionUser = {
-      ...userData,
-      isDemo: false,
-    };
-    setUser(sessionUser);
-    localStorage.setItem('anchor-user', JSON.stringify(sessionUser));
-    setActivePage('dashboard');
-  }
+  // Firebase login/signup are handled inside their respective components now.
+  // We only need to handle Demo Login here.
 
   function handleDemoLogin() {
     const sessionUser = {
@@ -86,9 +102,17 @@ function App() {
     setActivePage('dashboard');
   }
 
-  function handleLogout() {
-    setUser(null);
-    localStorage.removeItem('anchor-user');
+  async function handleLogout() {
+    if (user?.isDemo) {
+      setUser(null);
+      localStorage.removeItem('anchor-user');
+    } else {
+      try {
+        await signOut(auth);
+      } catch (err) {
+        console.error('Logout failed:', err);
+      }
+    }
     setAuthView('login');
     setActivePage('dashboard');
     setSelectedResource(null);
@@ -168,11 +192,18 @@ function App() {
   }
 
   // ── Authentication Views Guard ──
+  if (loadingAuth) {
+    return (
+      <div className="auth-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+        Loading...
+      </div>
+    );
+  }
+
   if (!user) {
     if (authView === 'signup') {
       return (
         <Signup
-          onSignup={handleSignup}
           onSwitchView={setAuthView}
           theme={theme}
           onToggleTheme={handleToggleTheme}
@@ -191,7 +222,6 @@ function App() {
     }
     return (
       <Login
-        onLogin={handleLogin}
         onSwitchView={setAuthView}
         theme={theme}
         onToggleTheme={handleToggleTheme}

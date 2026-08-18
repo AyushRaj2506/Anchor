@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../config/firebase';
 import './Login.css';
 
 /**
  * Login Component - Anchor College Second Brain Sign In Screen.
  */
-function Login({ onLogin, onSwitchView, theme, onToggleTheme }) {
+function Login({ onSwitchView, theme, onToggleTheme }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   function validateForm() {
     const newErrors = {};
@@ -28,10 +31,22 @@ function Login({ onLogin, onSwitchView, theme, onToggleTheme }) {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (validateForm()) {
-      onLogin({ email, name: email.split('@')[0], isDemo: false });
+      setLoading(true);
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        // Navigation will be handled automatically by onAuthStateChanged in App.jsx
+      } catch (err) {
+        let authErr = 'Invalid email or password.';
+        if (err.code === 'auth/network-request-failed') {
+          authErr = 'Unable to connect to the authentication service. Please try again.';
+        }
+        setErrors({ ...errors, auth: authErr });
+      } finally {
+        setLoading(false);
+      }
     }
   }
 
@@ -115,6 +130,12 @@ function Login({ onLogin, onSwitchView, theme, onToggleTheme }) {
           </div>
 
           <form onSubmit={handleSubmit} className="auth-form" noValidate>
+            {errors.auth && (
+              <div className="auth-error-msg" style={{ marginBottom: '1rem', textAlign: 'center' }} role="alert">
+                {errors.auth}
+              </div>
+            )}
+            
             {/* Email input */}
             <div className="auth-field">
               <label htmlFor="login-email" className="auth-label">Email address</label>
@@ -174,24 +195,12 @@ function Login({ onLogin, onSwitchView, theme, onToggleTheme }) {
               )}
             </div>
 
-            <button type="submit" className="auth-submit-btn">
-              Log in
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
+              {loading ? 'Logging in...' : 'Log in'}
             </button>
           </form>
 
-          <div className="auth-divider">
-            <span>or continue with</span>
-          </div>
-
-          <button
-            type="button"
-            className="auth-google-btn"
-            onClick={() => onLogin({ email: 'google.user@anchor.edu', name: 'Google User', isDemo: false })}
-          >
-            <span className="auth-google-icon" aria-hidden="true">G</span> Continue with Google
-          </button>
-
-          <div className="auth-switch-prompt">
+          <div className="auth-switch-prompt" style={{ marginTop: '2rem' }}>
             Don't have an account?{' '}
             <button className="auth-switch-btn" onClick={() => onSwitchView('signup')}>
               Sign up

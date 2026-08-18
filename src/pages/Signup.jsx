@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../config/firebase';
 import './Signup.css';
 
 /**
  * Signup Component - Registration page for creating Anchor credentials.
  */
-function Signup({ onSignup, onSwitchView, theme, onToggleTheme }) {
+function Signup({ onSwitchView, theme, onToggleTheme }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -12,6 +14,7 @@ function Signup({ onSignup, onSwitchView, theme, onToggleTheme }) {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   // Dynamic Password Validation Checklist indicators
   const [checks, setChecks] = useState({
@@ -63,10 +66,23 @@ function Signup({ onSignup, onSwitchView, theme, onToggleTheme }) {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (validateForm()) {
-      onSignup({ email, name: fullName, isDemo: false });
+      setLoading(true);
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName: fullName });
+        // Navigation handled by onAuthStateChanged in App.jsx
+      } catch (err) {
+        let authErr = 'Failed to create account.';
+        if (err.code === 'auth/email-already-in-use') authErr = 'This email is already registered. Try logging in instead.';
+        if (err.code === 'auth/weak-password') authErr = 'Password is too weak.';
+        if (err.code === 'auth/network-request-failed') authErr = 'Unable to connect to the authentication service. Please try again.';
+        setErrors({ ...errors, auth: authErr });
+      } finally {
+        setLoading(false);
+      }
     }
   }
 
@@ -149,6 +165,12 @@ function Signup({ onSignup, onSwitchView, theme, onToggleTheme }) {
           </div>
 
           <form onSubmit={handleSubmit} className="auth-form" noValidate>
+            {errors.auth && (
+              <div className="auth-error-msg" style={{ marginBottom: '1rem', textAlign: 'center' }} role="alert">
+                {errors.auth}
+              </div>
+            )}
+            
             {/* Full Name */}
             <div className="auth-field">
               <label htmlFor="signup-name" className="auth-label">Full name</label>
@@ -280,24 +302,12 @@ function Signup({ onSignup, onSwitchView, theme, onToggleTheme }) {
               )}
             </div>
 
-            <button type="submit" className="auth-submit-btn">
-              Create account
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
+              {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
 
-          <div className="auth-divider">
-            <span>or continue with</span>
-          </div>
-
-          <button
-            type="button"
-            className="auth-google-btn"
-            onClick={() => onSignup({ email: 'google.signup@anchor.edu', name: 'Google User', isDemo: false })}
-          >
-            <span className="auth-google-icon" aria-hidden="true">G</span> Sign up with Google
-          </button>
-
-          <div className="auth-switch-prompt">
+          <div className="auth-switch-prompt" style={{ marginTop: '2rem' }}>
             Already have an account?{' '}
             <button className="auth-switch-btn" onClick={() => onSwitchView('login')}>
               Log in
