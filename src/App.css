@@ -1,0 +1,38 @@
+/* ===========================
+   APP SHELL — overall layout
+   =========================== */
+
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--color-bg);
+  transition: var(--transition-theme);
+}
+
+/* Right-hand side: header stacked on content */
+.app-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Scrollable content area below the header */
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--color-bg);
+  transition: background-color 200ms ease;
+}
+
+/* Placeholder shown for unimplemented pages */
+.page-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-base);
+}

@@ -1,0 +1,32 @@
+/* ===========================
+   RESOURCE STATS GRID
+   =========================== */
+
+.resource-stats {
+  display: grid;
+  /* 4 equal columns on desktop; auto-fill on smaller screens */
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+/* Tablet: 2 columns */
+@media (max-width: 900px) {
+  .resource-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile: 2 columns still (compact) */
+@media (max-width: 480px) {
+  .resource-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+}
+
+/* Very small phones: single column */
+@media (max-width: 340px) {
+  .resource-stats {
+    grid-template-columns: 1fr;
+  }
+}

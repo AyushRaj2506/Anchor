@@ -1,0 +1,379 @@
+/* ==========================================================================
+   ANCHOR — GLOBAL DESIGN SYSTEM
+   Inter font + CSS custom properties + global resets + animations
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ==========================================================================
+   DESIGN TOKENS — LIGHT THEME (default)
+   ========================================================================== */
+
+:root,
+:root[data-theme="light"] {
+
+  /* ── Color: Backgrounds ── */
+  --color-bg:               #f7f5f1;   /* warm ivory page background */
+  --color-surface:          #ffffff;   /* card / panel surface */
+  --color-surface-secondary:#f4f1ec;   /* secondary / knowledge-card bg */
+  --color-surface-elevated: #ffffff;   /* elevated modals/dropdowns */
+  --color-surface-hover:    #faf7f3;   /* hover state for interactive surfaces */
+
+  /* ── Color: Sidebar (always dark regardless of theme) ── */
+  --color-sidebar:          #1a2a1a;
+  --color-sidebar-text:     #a8bca8;
+  --color-sidebar-text-active: #f0ebe4;
+  --color-sidebar-hover:    rgba(255,255,255,0.07);
+  --color-sidebar-active:   rgba(255,255,255,0.13);
+  --color-sidebar-border:   rgba(255,255,255,0.08);
+
+  /* ── Color: Header ── */
+  --color-header-bg:        #f7f5f1;
+  --color-header-border:    #e5e0d8;
+
+  /* ── Color: Text ── */
+  --color-text-primary:     #22201e;   /* deep warm charcoal */
+  --color-text-secondary:   #6b6560;   /* muted body secondary */
+  --color-text-muted:       #9e9891;   /* metadata, placeholders */
+  --color-text-inverse:     #f0ebe4;
+
+  /* ── Color: Borders ── */
+  --color-border:           #e5e0d8;
+  --color-border-light:     #ede9e2;
+
+  /* ── Color: Accent — Terracotta (primary CTA) ── */
+  --color-accent:           #c97b5a;
+  --color-accent-hover:     #b36848;
+  --color-accent-soft:      #f5ebe5;
+
+  /* ── Color: Green (secondary / forest) ── */
+  --color-green:            #3d5c35;
+  --color-green-hover:      #2d4526;
+  --color-green-soft:       #e6efe5;
+  --color-green-muted:      #6b9460;
+
+  /* ── Color: Status ── */
+  --color-success:          #4a7a40;
+  --color-success-bg:       #e8f2e6;
+  --color-warning:          #a86b0a;
+  --color-warning-bg:       #fdf0d9;
+  --color-danger:           #b83232;
+  --color-danger-bg:        #fce8e8;
+  --color-info:             #2a6090;
+  --color-info-bg:          #e0edf8;
+  --color-purple:           #6b50b8;
+  --color-purple-bg:        #ece8f8;
+
+  /* ── Color: Kanban columns ── */
+  --color-col-todo:         #b8710a;
+  --color-col-inprogress:   #2a6496;
+  --color-col-done:         #4a7a40;
+
+  /* ── Input ── */
+  --color-input-bg:         #ffffff;
+  --color-input-border:     #d8d3cb;
+  --color-input-border-focus: #c97b5a;
+  --color-input-focus-ring: rgba(201,123,90,0.15);
+
+  /* ── Radius ── */
+  --radius-xs:  4px;
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  20px;
+  --radius-full: 9999px;
+
+  /* ── Shadow ── */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg:  0 10px 30px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05);
+
+  /* ── Spacing ── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+
+  /* ── Typography ── */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system,
+               BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-xs:   0.72rem;
+  --font-size-sm:   0.8rem;
+  --font-size-base: 0.875rem;
+  --font-size-md:   1rem;
+  --font-size-lg:   1.15rem;
+  --font-size-xl:   1.4rem;
+  --font-size-2xl:  1.75rem;
+  --font-size-3xl:  2.1rem;
+
+  /* ── Transition ── */
+  --transition-fast:   120ms ease;
+  --transition-base:   180ms ease;
+  --transition-slow:   280ms ease;
+  --transition-theme:  background-color 200ms ease, color 200ms ease,
+                       border-color 200ms ease, box-shadow 200ms ease;
+}
+
+/* ==========================================================================
+   DESIGN TOKENS — DARK THEME
+   ========================================================================== */
+
+:root[data-theme="dark"] {
+
+  /* ── Backgrounds ── */
+  --color-bg:               #111812;   /* deep forest-charcoal */
+  --color-surface:          #1a2519;   /* dark green-gray card surface */
+  --color-surface-secondary:#1e2e1c;   /* knowledge-card / secondary */
+  --color-surface-elevated: #213020;   /* slightly lighter elevated surface */
+  --color-surface-hover:    #243522;   /* hover tint */
+
+  /* ── Header ── */
+  --color-header-bg:        #111812;
+  --color-header-border:    #253322;
+
+  /* ── Text ── */
+  --color-text-primary:     #e8e3dc;   /* warm off-white */
+  --color-text-secondary:   #96a896;   /* muted sage-gray */
+  --color-text-muted:       #657065;   /* darker muted for metadata */
+
+  /* ── Borders ── */
+  --color-border:           #2d3e2b;
+  --color-border-light:     #263625;
+
+  /* ── Accent ── */
+  --color-accent:           #d48b6a;   /* slightly warmer terracotta for dark */
+  --color-accent-hover:     #c97b5a;
+  --color-accent-soft:      #3a2218;
+
+  /* ── Green ── */
+  --color-green:            #6aab5e;
+  --color-green-hover:      #58954c;
+  --color-green-soft:       #182c16;
+  --color-green-muted:      #5a8e50;
+
+  /* ── Status ── */
+  --color-success:          #65a058;
+  --color-success-bg:       #182c16;
+  --color-warning:          #d49030;
+  --color-warning-bg:       #2e1f08;
+  --color-danger:           #e05555;
+  --color-danger-bg:        #351515;
+  --color-info:             #5090c8;
+  --color-info-bg:          #102030;
+  --color-purple:           #9880d8;
+  --color-purple-bg:        #25183e;
+
+  /* ── Kanban column accent ── */
+  --color-col-todo:         #d49030;
+  --color-col-inprogress:   #5090c8;
+  --color-col-done:         #65a058;
+
+  /* ── Input ── */
+  --color-input-bg:         #192619;
+  --color-input-border:     #2d3e2b;
+  --color-input-border-focus: #d48b6a;
+  --color-input-focus-ring: rgba(212,139,106,0.2);
+
+  /* ── Shadows ── */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.25);
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.20);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.40), 0 1px 3px rgba(0,0,0,0.25);
+  --shadow-lg:  0 10px 30px rgba(0,0,0,0.50), 0 2px 6px rgba(0,0,0,0.30);
+}
+
+/* ==========================================================================
+   GLOBAL RESET & BASE
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: var(--transition-theme);
+}
+
+/* ==========================================================================
+   GLOBAL ANIMATIONS
+   ========================================================================== */
+
+/* ── Page / section entry ── */
+@keyframes anchor-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);  }
+}
+
+@keyframes anchor-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Dashboard stagger sections ── */
+@keyframes anchor-stagger-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0);  }
+}
+
+/* ── Bookmark / icon pop ── */
+@keyframes anchor-pop {
+  0%   { transform: scale(1);    }
+  40%  { transform: scale(1.25); }
+  70%  { transform: scale(0.92); }
+  100% { transform: scale(1);    }
+}
+
+/* ── Typing dots pulse ── */
+@keyframes ak-bounce {
+  0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
+  40%           { transform: scale(1);   opacity: 1;   }
+}
+
+/* ── Theme icon spin ── */
+@keyframes anchor-spin-in {
+  from { transform: rotate(-30deg) scale(0.85); opacity: 0; }
+  to   { transform: rotate(0deg)   scale(1);    opacity: 1; }
+}
+
+/* ── Donut draw ── */
+@keyframes anchor-donut-draw {
+  from { opacity: 0; transform: rotate(-90deg) scale(0.92); }
+  to   { opacity: 1; transform: rotate(0deg)   scale(1);    }
+}
+
+/* ── Shimmer (skeleton/hover bg) ── */
+@keyframes anchor-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* ── Sidebar accent bar ── */
+@keyframes anchor-accent-in {
+  from { transform: scaleY(0); opacity: 0; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+
+/* ==========================================================================
+   UTILITY ANIMATION CLASSES
+   ========================================================================== */
+
+/* Page entry — page containers apply this */
+.page-enter {
+  animation: anchor-fade-up 240ms ease-out both;
+}
+
+/* Dashboard stagger — applied with inline animation-delay */
+.stagger-item {
+  animation: anchor-stagger-in 240ms ease-out both;
+}
+
+/* Icon pop — applied briefly via JS */
+.icon-pop {
+  animation: anchor-pop 220ms ease both;
+}
+
+/* ==========================================================================
+   REDUCED MOTION — disable non-essential animations
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .page-enter,
+  .stagger-item {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==========================================================================
+   GLOBAL LINK & FOCUS
+   ========================================================================== */
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* ==========================================================================
+   SCROLLBAR — subtle, themed
+   ========================================================================== */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* ==========================================================================
+   UTILITY CLASSES
+   ========================================================================== */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ==========================================================================
+   GLOBAL SELECT STYLING (dark mode fix)
+   ========================================================================== */
+
+select {
+  color-scheme: light;
+}
+
+[data-theme="dark"] select {
+  color-scheme: dark;
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
+  border-color: var(--color-input-border);
+}

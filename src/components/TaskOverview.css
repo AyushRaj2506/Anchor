@@ -1,0 +1,104 @@
+/* ===========================
+   TASK OVERVIEW (donut chart)
+   =========================== */
+
+.task-overview-card {
+  /* inherits .card */
+}
+
+.task-overview-body {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+/* ── Donut ── */
+.donut-wrapper {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  flex-shrink: 0;
+}
+
+.donut {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+/* The "hole" in the donut */
+.donut-hole {
+  position: absolute;
+  inset: 0;
+  margin: 13px;
+  background: var(--color-surface);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-theme);
+}
+
+.donut-total {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.donut-total-label {
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 500;
+}
+
+/* ── Legend ── */
+.task-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.task-legend-count {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  min-width: 18px;
+  line-height: 1;
+}
+
+.task-legend-label {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 480px) {
+  .task-overview-body {
+    gap: 18px;
+  }
+
+  .donut-wrapper {
+    width: 88px;
+    height: 88px;
+  }
+}

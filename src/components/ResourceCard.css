@@ -1,0 +1,209 @@
+/* ===========================
+   RESOURCE CARD — Library row
+   =========================== */
+
+.rc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--color-border-light);
+  list-style: none;
+  border-radius: var(--radius-sm);
+  margin: 0 -8px;
+  transition: background var(--transition-base), border-color var(--transition-base);
+}
+
+.rc-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.rc-item:first-child {
+  padding-top: 0;
+}
+
+.rc-item:hover {
+  background: var(--color-surface-hover);
+}
+
+/* ── Clickable area (icon + body) ── */
+.rc-clickable {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: opacity var(--transition-fast);
+}
+
+.rc-clickable:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Icon box ── */
+.rc-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 1px;
+  transition: transform var(--transition-fast);
+}
+
+.rc-item:hover .rc-icon {
+  transform: scale(1.02);
+}
+
+.rc-icon-emoji {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.rc-icon-label {
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+
+/* ── Body ── */
+.rc-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rc-title {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--transition-fast);
+}
+
+.rc-item:hover .rc-title {
+  color: var(--color-accent);
+}
+
+.rc-meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.rc-meta-dot {
+  color: var(--color-border);
+}
+
+/* ── Tags ── */
+.rc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.rc-tag {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+  transition: var(--transition-theme), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.rc-tag:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── Actions ── */
+.rc-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.rc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  opacity: 0.8;
+}
+
+.rc-item:hover .rc-btn {
+  opacity: 1;
+}
+
+.rc-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  transform: translateY(-1px);
+}
+
+.rc-btn:active {
+  transform: translateY(0);
+}
+
+.rc-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.rc-bookmark--active {
+  color: var(--color-accent);
+  opacity: 1;
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 480px) {
+  .rc-title {
+    white-space: normal;
+  }
+
+  .rc-meta {
+    gap: 2px;
+  }
+
+  .rc-more {
+    display: none;
+  }
+}

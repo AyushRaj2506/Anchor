@@ -1,0 +1,173 @@
+/* ===========================
+   TASK FILTERS BAR
+   =========================== */
+
+.tf-bar {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  transition: var(--transition-theme);
+}
+
+/* ── Search ── */
+.tf-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  padding: 0 11px;
+  height: 34px;
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 260px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+              background var(--transition-theme);
+}
+
+.tf-search:hover {
+  border-color: var(--color-text-muted);
+}
+
+.tf-search:focus-within {
+  border-color: var(--color-input-border-focus);
+  box-shadow: 0 0 0 3px var(--color-input-focus-ring);
+}
+
+.tf-search-icon {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.tf-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.82rem;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+.tf-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.tf-clear-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.tf-clear-btn:hover { color: var(--color-text-primary); }
+
+.tf-clear-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Controls ── */
+.tf-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+}
+
+/* ── Select wrapper ── */
+.tf-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.tf-label-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.tf-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  padding: 0 28px 0 10px;
+  height: 34px;
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  min-width: 108px;
+  white-space: nowrap;
+  transition: border-color var(--transition-fast), background var(--transition-theme);
+}
+
+.tf-select:hover { border-color: var(--color-text-muted); }
+
+.tf-select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.tf-select-arrow {
+  position: absolute;
+  right: 9px;
+  pointer-events: none;
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 768px) {
+  .tf-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .tf-search {
+    max-width: none;
+  }
+
+  .tf-controls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .tf-select {
+    min-width: 0;
+    flex: 1 1 100px;
+    font-size: 0.78rem;
+  }
+
+  .tf-controls {
+    gap: 5px;
+  }
+}

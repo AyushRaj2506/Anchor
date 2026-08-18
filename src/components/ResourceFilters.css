@@ -1,0 +1,209 @@
+/* ===========================
+   RESOURCE FILTERS BAR
+   =========================== */
+
+.rf-bar {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  transition: var(--transition-theme);
+}
+
+/* ── Search ── */
+.rf-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  padding: 0 11px;
+  height: 34px;
+  flex: 1 1 180px;
+  min-width: 0;
+  max-width: 280px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+              background var(--transition-theme);
+}
+
+.rf-search:hover {
+  border-color: var(--color-text-muted);
+}
+
+.rf-search:focus-within {
+  border-color: var(--color-input-border-focus);
+  box-shadow: 0 0 0 3px var(--color-input-focus-ring);
+}
+
+.rf-search-icon {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.rf-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 0.82rem;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+.rf-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.rf-clear-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.rf-clear-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.rf-clear-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Controls ── */
+.rf-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+}
+
+.rf-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.rf-label-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.rf-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  padding: 0 28px 0 10px;
+  height: 34px;
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  min-width: 108px;
+  white-space: nowrap;
+  transition: border-color var(--transition-fast), background var(--transition-theme);
+}
+
+.rf-select:hover {
+  border-color: var(--color-text-muted);
+}
+
+.rf-select:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.rf-select-arrow {
+  position: absolute;
+  right: 9px;
+  pointer-events: none;
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Filter button ── */
+.rf-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  height: 34px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.rf-filter-btn:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-text-muted);
+  transform: translateY(-1px);
+}
+
+.rf-filter-btn:active {
+  transform: translateY(0);
+}
+
+.rf-filter-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 768px) {
+  .rf-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .rf-search {
+    max-width: none;
+  }
+
+  .rf-controls {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .rf-select {
+    min-width: 0;
+    flex: 1 1 100px;
+    font-size: 0.78rem;
+  }
+
+  .rf-controls {
+    gap: 5px;
+  }
+}

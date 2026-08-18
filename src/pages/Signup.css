@@ -1,0 +1,16 @@
+/* ==========================================================================
+   SIGNUP PAGE SPECIFIC STYLES
+   ========================================================================== */
+
+/* Reuses most styles from Login.css via common class names (.auth-container, .auth-left, .auth-right, .auth-form-card etc.) */
+
+/* Adjust padding inside form card for more field density */
+.auth-form-card {
+  padding: 32px 32px;
+}
+
+@media (max-width: 768px) {
+  .auth-form-card {
+    padding: 20px;
+  }
+}

@@ -1,0 +1,192 @@
+/* ===========================
+   TASK CARD
+   =========================== */
+
+.tc-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 13px 13px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow var(--transition-base), border-color var(--transition-base),
+              transform var(--transition-base), background var(--transition-theme);
+}
+
+.tc-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-text-muted);
+  transform: translateY(-2px);
+}
+
+/* Completed cards: visually quieter */
+.tc-card--completed {
+  background: var(--color-surface-hover);
+  border-color: var(--color-border-light);
+  opacity: 0.82;
+  transition: opacity var(--transition-base), transform var(--transition-base), background var(--transition-theme);
+}
+
+.tc-card--completed:hover {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+  opacity: 1;
+}
+
+/* ── Top row: title + actions ── */
+.tc-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.tc-check {
+  color: var(--color-success);
+  font-size: 0.82rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.tc-title {
+  flex: 1;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+  word-break: break-word;
+  transition: color var(--transition-fast), text-decoration-color var(--transition-fast);
+}
+
+.tc-title--done {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-border);
+}
+
+/* ── Action buttons ── */
+.tc-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.tc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  opacity: 0.75;
+}
+
+.tc-card:hover .tc-btn {
+  opacity: 1;
+}
+
+.tc-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  transform: translateY(-1px);
+}
+
+.tc-btn:active {
+  transform: translateY(0);
+}
+
+.tc-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.tc-bookmark--active {
+  color: var(--color-accent);
+  opacity: 1;
+}
+
+/* ── Category row ── */
+.tc-category {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tc-category-icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+}
+
+.tc-category-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* ── Footer: date + priority badge ── */
+.tc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.tc-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+.tc-date-icon {
+  display: flex;
+  align-items: center;
+}
+
+.tc-date--completed {
+  color: var(--color-success);
+}
+
+/* ── Priority badge ── */
+.tc-badge {
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.1px;
+  transition: transform var(--transition-fast);
+}
+
+.tc-card:hover .tc-badge {
+  transform: scale(1.03);
+}
+
+.tc-badge--high {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.tc-badge--medium {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.tc-badge--low {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}

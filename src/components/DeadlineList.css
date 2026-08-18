@@ -1,0 +1,123 @@
+/* ===========================
+   DEADLINE LIST
+   =========================== */
+
+.deadline-card {
+  /* inherits .card base */
+}
+
+.deadline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.deadline-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 6px 6px;
+  border-radius: var(--radius-sm);
+  margin: 0 -6px;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.deadline-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.deadline-item:hover .deadline-title {
+  color: var(--color-accent);
+}
+
+.deadline-item:hover .priority-badge {
+  transform: scale(1.04);
+}
+
+/* ── Date block ── */
+.deadline-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 5px 9px;
+  flex-shrink: 0;
+  min-width: 42px;
+  transition: var(--transition-theme);
+}
+
+.deadline-month {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.deadline-day {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.1;
+}
+
+/* ── Info ── */
+.deadline-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.deadline-title {
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deadline-remaining {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* ── Priority badge ── */
+.priority-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  letter-spacing: 0.1px;
+  transition: transform var(--transition-fast);
+}
+
+.badge--high {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.badge--medium {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.badge--low {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+@media (max-width: 480px) {
+  .deadline-date {
+    padding: 4px 7px;
+    min-width: 36px;
+  }
+}
