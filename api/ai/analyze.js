@@ -1,7 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 
 // Initialize Gemini SDK with the server-side environment variable.
-// Vercel exposes process.env automatically.
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const MAX_INPUT_LENGTH = 50000; // 50k chars reasonable limit
@@ -13,21 +12,54 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { text } = req.body;
+    let textToAnalyze = '';
 
-    // 1. Validate Input
-    if (text === undefined || text === null || typeof text !== 'string') {
-      return res.status(400).json({ success: false, error: 'Text is required and must be a string.' });
+    // 1. Parse and Validate Input
+    if (req.body.resource) {
+      const { resource } = req.body;
+      if (!resource || typeof resource !== 'object') {
+        return res.status(400).json({ success: false, error: 'Invalid resource object provided.' });
+      }
+
+      const { title, description, notes, category, tags } = resource;
+      
+      // Combine fields to construct a usable text block
+      const parts = [];
+      if (title) parts.push(`Title: ${title}`);
+      if (description) parts.push(`Description: ${description}`);
+      if (notes) parts.push(`Notes: ${notes}`);
+      if (category) parts.push(`Category: ${category}`);
+      if (tags && Array.isArray(tags) && tags.length > 0) {
+        parts.push(`Tags: ${tags.join(', ')}`);
+      }
+
+      textToAnalyze = parts.join('\n');
+
+      if (textToAnalyze.trim().length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Resource does not contain enough text data (title, description, or notes) to analyze.' 
+        });
+      }
+    } else if (req.body.text !== undefined && req.body.text !== null) {
+      const { text } = req.body;
+      if (typeof text !== 'string') {
+        return res.status(400).json({ success: false, error: 'Text must be a string.' });
+      }
+      textToAnalyze = text;
+    } else {
+      return res.status(400).json({ success: false, error: 'Either resource or text is required.' });
     }
 
-    if (text.trim().length === 0) {
+    // Common character length check
+    if (textToAnalyze.trim().length === 0) {
       return res.status(400).json({ success: false, error: 'Text cannot be empty.' });
     }
 
-    if (text.length > MAX_INPUT_LENGTH) {
+    if (textToAnalyze.length > MAX_INPUT_LENGTH) {
       return res.status(400).json({ 
         success: false, 
-        error: `Text exceeds the maximum length of ${MAX_INPUT_LENGTH} characters.` 
+        error: `Input exceeds the maximum length of ${MAX_INPUT_LENGTH} characters.` 
       });
     }
 
@@ -40,46 +72,51 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3. Construct the strict prompt
+    // 3. Construct the prompt with strict guidelines
     const prompt = `
 Analyze the following text and return a structured JSON response.
 Do NOT include markdown formatting or backticks around the JSON.
 Return ONLY valid JSON matching this exact structure:
 {
-  "summary": "A concise summary of the text. (string or null)",
-  "category": "A single, broad academic or professional category this belongs to (e.g. DBMS, Operating Systems). (string or null)",
-  "tags": ["tag1", "tag2"] // Array of relevant short tags (strings).
+  "summary": "A concise summary based ONLY on the supplied text. (string or null)",
+  "category": "A single, broad academic/professional category this belongs to (e.g. DBMS, Operating Systems). (string or null)",
+  "tags": ["tag1", "tag2"], // Array of relevant short keywords (strings).
+  "importantInformation": ["fact1", "fact2"], // Array of important facts explicitly present.
+  "deadline": "YYYY-MM-DD (or explicit date string/description) ONLY if explicitly stated. (string or null)",
+  "actionItems": ["action1", "action2"] // Actions explicitly stated or clearly required.
 }
 
 CRITICAL RULES:
-1. Use ONLY information present in the provided text.
-2. Do NOT infer or invent specific facts that are not stated.
-3. If the text does not contain enough information to generate a field, return null (for strings) or [] (for arrays).
+1. Use ONLY information contained in the provided text.
+2. Do NOT invent facts or infer details.
+3. Do NOT infer dates, deadlines, organizations, requirements, or actions that are not explicitly stated.
+4. If information is unavailable for a field, return null (for strings) or [] (for arrays). Do not guess.
 
 Text to analyze:
 """
-${text}
+${textToAnalyze}
 """
     `.trim();
 
-    // 4. Call Gemini (with timeout protection via Promise.race, although Vercel has its own limits)
-    // We'll rely on Vercel's default 10s or custom timeout, but a safe promise race is good practice.
+    // 4. Call Gemini
     const fetchPromise = ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           responseMimeType: "application/json",
-          // The SDK supports enforcing a schema:
           responseSchema: {
             type: "object",
             properties: {
               summary: { type: "string", nullable: true },
               category: { type: "string", nullable: true },
-              tags: { type: "array", items: { type: "string" } }
+              tags: { type: "array", items: { type: "string" } },
+              importantInformation: { type: "array", items: { type: "string" } },
+              deadline: { type: "string", nullable: true },
+              actionItems: { type: "array", items: { type: "string" } }
             },
-            required: ["summary", "category", "tags"]
+            required: ["summary", "category", "tags", "importantInformation", "deadline", "actionItems"]
           },
-          temperature: 0.1 // Low temp for more deterministic, factual extraction
+          temperature: 0.1
         }
     });
 
@@ -100,14 +137,19 @@ ${text}
       });
     }
 
-    // 5. Send successful structured response
+    // 5. Schema Validation
+    const validatedData = {
+      summary: typeof resultJson.summary === 'string' ? resultJson.summary : null,
+      category: typeof resultJson.category === 'string' ? resultJson.category : null,
+      tags: Array.isArray(resultJson.tags) ? resultJson.tags.filter(t => typeof t === 'string') : [],
+      importantInformation: Array.isArray(resultJson.importantInformation) ? resultJson.importantInformation.filter(f => typeof f === 'string') : [],
+      deadline: typeof resultJson.deadline === 'string' ? resultJson.deadline : null,
+      actionItems: Array.isArray(resultJson.actionItems) ? resultJson.actionItems.filter(a => typeof a === 'string') : []
+    };
+
     return res.status(200).json({
       success: true,
-      data: {
-        summary: resultJson.summary || null,
-        category: resultJson.category || null,
-        tags: Array.isArray(resultJson.tags) ? resultJson.tags : []
-      }
+      data: validatedData
     });
 
   } catch (error) {

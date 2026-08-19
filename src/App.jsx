@@ -16,6 +16,7 @@ import { TASKS } from './data/taskData';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './config/firebase';
 import { getResources, addResource, updateResource, deleteResource, getTasks, addTask, updateTask, deleteTask } from './services/firestore';
+import { serverTimestamp } from 'firebase/firestore';
 import './App.css';
 
 /**
@@ -249,6 +250,29 @@ function App() {
     }
   }
 
+  async function handleUpdateResource(resourceId, updates) {
+    let enrichedUpdates = { ...updates };
+    let localUpdates = { ...updates };
+
+    // If updates contain AI fields, add the analysis timestamp
+    if (updates.aiSummary !== undefined) {
+      enrichedUpdates.aiAnalyzedAt = serverTimestamp();
+      localUpdates.aiAnalyzedAt = new Date();
+    }
+
+    // Optimistic UI update
+    setResources(prev => prev.map(r => r.id === resourceId ? { ...r, ...localUpdates } : r));
+
+    if (user && !user.isDemo) {
+      try {
+        await updateResource(user.uid, resourceId, enrichedUpdates);
+      } catch (err) {
+        console.error('Failed to update resource in Firestore:', err);
+        throw err; // Propagate error so Caller can revert UI or show warning
+      }
+    }
+  }
+
   async function handleDeleteResource(resourceId) {
     if (user && !user.isDemo) {
       try {
@@ -386,6 +410,7 @@ function App() {
             onBack={() => handleNavigate('library')}
             onToggleBookmark={handleToggleBookmark}
             onDeleteResource={handleDeleteResource}
+            onUpdateResource={handleUpdateResource}
             onNavigate={handleNavigate}
           />
         );

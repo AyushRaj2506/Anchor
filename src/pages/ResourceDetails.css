@@ -722,3 +722,21 @@
   }
 }
 
+/* ===========================
+   AI LOADING SPINNER
+   =========================== */
+
+.rd-ai-spinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(74, 103, 65, 0.15);
+  border-radius: 50%;
+  border-top-color: var(--color-accent);
+  animation: rd-spin 0.8s ease-in-out infinite;
+}
+
+@keyframes rd-spin {
+  to { transform: rotate(360deg); }
+}
+

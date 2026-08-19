@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './ResourceDetails.css';
+import { analyzeResource } from '../services/ai';
 
 /**
  * ResourceDetails — shows full information for a single resource.
@@ -9,6 +10,7 @@ import './ResourceDetails.css';
  *   onBack           — function to call when "← Back to Library" is clicked
  *   onToggleBookmark — function(resourceId) to toggle bookmark state (persists to Firestore)
  *   onDeleteResource — function(resourceId) to delete this resource
+ *   onUpdateResource — function(resourceId, updates) to persist AI analysis results
  *   onNavigate       — function(pageId) to navigate between pages
  *
  * How it works:
@@ -17,7 +19,7 @@ import './ResourceDetails.css';
  *   - Action items are local UI state only (future milestone for persistence)
  *   - Document preview is a styled CSS placeholder — no PDF library in scope
  */
-function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource, onNavigate }) {
+function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource, onUpdateResource, onNavigate }) {
   const {
     id,
     title,
@@ -31,10 +33,56 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
     description,
     notes,
     createdAt,
+    // AI fields
+    aiSummary,
+    aiCategory,
+    aiTags = [],
+    aiImportantInformation = [],
+    aiDeadline,
+    aiActionItems = [],
+    aiAnalyzedAt,
   } = resource;
 
   // Bookmark pop animation
   const [bookmarkPopping, setBookmarkPopping] = useState(false);
+
+  // AI analysis state
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiError, setAiError] = useState(null);
+
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setAiError(null);
+
+    try {
+      const result = await analyzeResource(resource);
+      
+      try {
+        if (onUpdateResource) {
+          await onUpdateResource(id, {
+            aiSummary: result.summary,
+            aiCategory: result.category,
+            aiTags: result.tags,
+            aiImportantInformation: result.importantInformation,
+            aiDeadline: result.deadline,
+            aiActionItems: result.actionItems
+          });
+        }
+      } catch (firestoreError) {
+        console.error('Firestore save failed:', firestoreError);
+        throw new Error('FIRESTORE_SAVE_FAILED');
+      }
+    } catch (err) {
+      console.error('AI Analysis failed:', err);
+      if (err.message === 'FIRESTORE_SAVE_FAILED') {
+        setAiError("AI analysis completed, but it could not be saved. Please try again.");
+      } else {
+        setAiError("AI analysis is temporarily unavailable. Your resource was not affected.");
+      }
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   function handleBookmarkToggle() {
     setBookmarkPopping(true);
@@ -87,6 +135,17 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
         </button>
 
         <div className="rd-header-actions">
+          {/* AI Analysis button */}
+          <button
+            className="rd-action-btn"
+            style={{ background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600 }}
+            onClick={handleAnalyze}
+            disabled={analyzing}
+            aria-label={aiSummary ? "Analyze this resource again with AI" : "Analyze this resource with AI"}
+          >
+            {analyzing ? '✨ Analyzing...' : aiSummary ? '✨ Analyze Again' : '✨ Analyze with AI'}
+          </button>
+
           {/* Bookmark — fully functional, persists to Firestore */}
           <button
             className={`rd-action-btn ${bookmarked ? 'rd-action-btn--active' : ''} ${bookmarkPopping ? 'icon-pop' : ''}`}
@@ -164,6 +223,95 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
               <p className="rd-empty-hint">No description added for this resource yet.</p>
             )}
           </section>
+
+          {/* ── AI Analysis Card ── */}
+          {(aiSummary || aiError || analyzing) && (
+            <section className="card rd-section rd-ai-section" aria-labelledby="rd-ai-heading">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '16px' }}>
+                <h2 id="rd-ai-heading" className="rd-section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)' }}>
+                  <span aria-hidden="true">✨</span> AI Analysis
+                </h2>
+                {aiAnalyzedAt && !analyzing && (
+                  <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
+                    Analyzed on {formatDate(aiAnalyzedAt)}
+                  </span>
+                )}
+              </div>
+
+              {analyzing && (
+                <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                  <div className="rd-ai-spinner" aria-hidden="true"></div>
+                  <p style={{ margin: 0, fontSize: '0.9rem' }}>Analyzing resource with Gemini...</p>
+                </div>
+              )}
+
+              {aiError && !analyzing && (
+                <div style={{ padding: '12px 16px', background: '#fde8e0', color: '#c0392b', borderRadius: 'var(--radius-sm)', border: '1px solid #f8d7da', fontSize: '0.85rem', marginBottom: '16px' }} role="alert">
+                  <strong>Status:</strong> {aiError}
+                </div>
+              )}
+
+              {aiSummary && !analyzing && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Summary */}
+                  <div>
+                    <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '6px' }}>Summary</h3>
+                    <p className="rd-summary-text" style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.5', color: 'var(--color-text-primary)' }}>{aiSummary}</p>
+                  </div>
+
+                  {/* Category & Tags in a grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '6px' }}>AI Category</h3>
+                      <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: '500', color: 'var(--color-text-primary)' }}>{aiCategory || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '6px' }}>AI Tags</h3>
+                      {aiTags.length > 0 ? (
+                        <div className="rd-tag-row" style={{ marginTop: '4px' }}>
+                          {aiTags.map(tag => <span key={tag} className="rd-tag">{tag}</span>)}
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>None</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Important Information */}
+                  <div>
+                    <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '8px' }}>Important Information</h3>
+                    {aiImportantInformation.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.88rem', color: 'var(--color-text-primary)' }}>
+                        {aiImportantInformation.map((info, idx) => <li key={idx}>{info}</li>)}
+                      </ul>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Not specified</p>
+                    )}
+                  </div>
+
+                  {/* Deadline & Action Items in a grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '6px' }}>AI Deadline</h3>
+                      <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: aiDeadline ? '600' : 'normal', color: aiDeadline ? '#c0392b' : 'var(--color-text-primary)' }}>
+                        {aiDeadline ? `📅 ${aiDeadline}` : 'Not specified'}
+                      </p>
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '8px' }}>Action Items</h3>
+                      {aiActionItems.length > 0 ? (
+                        <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.88rem', color: 'var(--color-text-primary)' }}>
+                          {aiActionItems.map((item, idx) => <li key={idx}>{item}</li>)}
+                        </ul>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Not specified</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* ── Source URL card (if applicable) ── */}
           {sourceUrl && (
