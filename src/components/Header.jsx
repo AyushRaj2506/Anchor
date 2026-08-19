@@ -21,6 +21,7 @@ function Header({ onMenuToggle, activePage, theme, onToggleTheme, user }) {
     ask:              'Ask My Knowledge',
     bookmarks:        'Bookmarks',
     'resource-details': 'Resource Details',
+    'ai-test':        'AI Test',
   };
   const title = PAGE_TITLES[activePage] || 'Anchor';
 

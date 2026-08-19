@@ -7,6 +7,7 @@ import Tasks from './pages/Tasks';
 import ResourceDetails from './pages/ResourceDetails';
 import Bookmarks from './pages/Bookmarks';
 import AskMyKnowledge from './pages/AskMyKnowledge';
+import AITest from './pages/AITest';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import DemoAccount from './pages/DemoAccount';
@@ -361,6 +362,8 @@ function App() {
             onDeleteResource={handleDeleteResource}
           />
         );
+      case 'ai-test':
+        return <AITest />;
       case 'resource-details':
         if (!selectedResource) {
           return (
