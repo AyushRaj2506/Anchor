@@ -6,7 +6,11 @@ import './TaskCard.css';
  * TaskCard — a single task card inside a Kanban column.
  *
  * Props:
- *   task — one task object from TASKS array
+ *   task           — one task object
+ *   onUpdateStatus — function(newStatus) — called when status dropdown changes
+ *   onDelete       — function() — called when delete is confirmed
+ *   onUpdateTask   — function(taskId, updates) — called for any task field updates
+ *                    (used for bookmark toggle to persist to Firestore)
  */
 
 const PRIORITY_CLASS = {
@@ -15,21 +19,24 @@ const PRIORITY_CLASS = {
   Low:    'tc-badge--low',
 };
 
-function TaskCard({ task, onUpdateStatus, onDelete }) {
+function TaskCard({ task, onUpdateStatus, onDelete, onUpdateTask }) {
   const {
     id, title, category, status,
     priority, deadline, completedOn, bookmarked,
   } = task;
 
-  const isCompleted = status === 'completed';
-  const [isBookmarked, setIsBookmarked] = useState(Boolean(bookmarked));
+  const isCompleted  = status === 'completed';
+  const isBookmarked = Boolean(bookmarked);
   const [popping, setPopping] = useState(false);
 
   function handleBookmark(e) {
     e.stopPropagation();
-    setIsBookmarked(prev => !prev);
     setPopping(true);
     setTimeout(() => setPopping(false), 240);
+    // Persist bookmark toggle via onUpdateTask if provided (Firestore for real users)
+    if (onUpdateTask) {
+      onUpdateTask(id, { bookmarked: !isBookmarked });
+    }
   }
 
   function handleDelete(e) {
@@ -69,11 +76,18 @@ function TaskCard({ task, onUpdateStatus, onDelete }) {
           >
             <Bookmark size={13} strokeWidth={isBookmarked ? 2.5 : 2} fill={isBookmarked ? 'currentColor' : 'none'} aria-hidden="true" />
           </button>
-          <select 
-            value={status} 
-            onChange={handleStatusChange} 
+          <select
+            value={status}
+            onChange={handleStatusChange}
             onClick={e => e.stopPropagation()}
-            style={{ padding: '2px 4px', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+            style={{
+              padding: '2px 4px',
+              fontSize: '0.75rem',
+              borderRadius: '4px',
+              border: '1px solid var(--border)',
+              background: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+            }}
             aria-label={`Change status for ${title}`}
           >
             <option value="todo">To Do</option>
@@ -102,12 +116,12 @@ function TaskCard({ task, onUpdateStatus, onDelete }) {
       <div className="tc-footer">
         {isCompleted ? (
           <span className="tc-date tc-date--completed">
-            <Check size={11} strokeWidth={2.5} aria-hidden="true" /> {completedOn}
+            <Check size={11} strokeWidth={2.5} aria-hidden="true" /> {completedOn || 'Completed'}
           </span>
         ) : (
           <span className="tc-date">
             <Calendar size={11} strokeWidth={2} className="tc-date-icon" aria-hidden="true" />
-            {deadline}
+            {deadline || 'No deadline'}
           </span>
         )}
 

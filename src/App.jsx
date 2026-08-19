@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
@@ -29,6 +29,8 @@ import './App.css';
  *   selectedResource — the resource object to show on the Resource Details page
  *                      (null when no resource is selected)
  *   resources        — shared resources collection state (holds bookmark toggles)
+ *   resourceError    — error message if Firestore resource load fails
+ *   taskError        — error message if Firestore task load fails
  */
 function App() {
   // ── Authentication State Persistence ──
@@ -49,8 +51,10 @@ function App() {
   const [selectedResource, setSelectedResource] = useState(null);
   const [resources, setResources]             = useState([]);
   const [loadingResources, setLoadingResources] = useState(false);
+  const [resourceError, setResourceError]     = useState(null);
   const [tasks, setTasks]                     = useState([]);
   const [loadingTasks, setLoadingTasks]       = useState(false);
+  const [taskError, setTaskError]             = useState(null);
   const [loadingAuth, setLoadingAuth]         = useState(true);
 
   // ── Firebase Auth Listener ──
@@ -93,24 +97,28 @@ function App() {
   useEffect(() => {
     if (!user) {
       setResources([]);
+      setResourceError(null);
       return;
     }
-    
+
     if (user.isDemo) {
       setResources(LIBRARY_RESOURCES);
+      setResourceError(null);
       return;
     }
 
     async function loadFirestoreResources() {
       setLoadingResources(true);
+      setResourceError(null);
       try {
         const data = await getResources(user.uid);
-        // data comes back sorted newest-first due to orderBy in service
         setResources(data);
       } catch (err) {
         console.error('Failed to load resources:', err);
-        // Fallback to mock data for display if network/permissions fail
-        setResources(LIBRARY_RESOURCES);
+        // Do NOT fall back to mock data for real users.
+        // Show an empty list with an error message instead.
+        setResources([]);
+        setResourceError('Could not load your resources. Please check your connection and try again.');
       } finally {
         setLoadingResources(false);
       }
@@ -123,22 +131,27 @@ function App() {
   useEffect(() => {
     if (!user) {
       setTasks([]);
+      setTaskError(null);
       return;
     }
-    
+
     if (user.isDemo) {
       setTasks(TASKS);
+      setTaskError(null);
       return;
     }
 
     async function loadFirestoreTasks() {
       setLoadingTasks(true);
+      setTaskError(null);
       try {
         const data = await getTasks(user.uid);
         setTasks(data);
       } catch (err) {
         console.error('Failed to load tasks:', err);
-        setTasks(TASKS); // Fallback to mock data for display
+        // Do NOT fall back to mock data for real users.
+        setTasks([]);
+        setTaskError('Could not load your tasks. Please check your connection and try again.');
       } finally {
         setLoadingTasks(false);
       }
@@ -214,6 +227,7 @@ function App() {
         setResources((prev) =>
           prev.map((r) => (r.id === resourceId ? { ...r, bookmarked: target.bookmarked } : r))
         );
+        alert('Failed to update bookmark. Please try again.');
       }
     }
   }
@@ -222,15 +236,15 @@ function App() {
     if (user && !user.isDemo) {
       try {
         const id = await addResource(user.uid, newResource);
-        setResources(prev => [{ id, ...newResource, time: 'Just now' }, ...prev]);
+        setResources(prev => [{ id, ...newResource, createdAt: new Date() }, ...prev]);
       } catch (err) {
         console.error('Failed to add resource:', err);
         alert('Failed to add resource. Please try again.');
       }
     } else {
-      // Demo mode
+      // Demo mode — local only
       const id = Date.now().toString();
-      setResources(prev => [{ id, ...newResource, time: 'Just now' }, ...prev]);
+      setResources(prev => [{ id, ...newResource, createdAt: new Date() }, ...prev]);
     }
   }
 
@@ -239,12 +253,19 @@ function App() {
       try {
         await deleteResource(user.uid, resourceId);
         setResources(prev => prev.filter(r => r.id !== resourceId));
+        // If currently viewing this resource, go back to Library
+        if (selectedResource?.id === resourceId) {
+          handleNavigate('library');
+        }
       } catch (err) {
         console.error('Failed to delete resource:', err);
         alert('Failed to delete resource. Please try again.');
       }
     } else {
       setResources(prev => prev.filter(r => r.id !== resourceId));
+      if (selectedResource?.id === resourceId) {
+        handleNavigate('library');
+      }
     }
   }
 
@@ -253,26 +274,27 @@ function App() {
     if (user && !user.isDemo) {
       try {
         const id = await addTask(user.uid, newTask);
-        setTasks(prev => [{ id, ...newTask }, ...prev]);
+        setTasks(prev => [{ id, ...newTask, createdAt: new Date() }, ...prev]);
       } catch (err) {
         console.error('Failed to add task:', err);
         alert('Failed to add task. Please try again.');
       }
     } else {
       const id = Date.now().toString();
-      setTasks(prev => [{ id, ...newTask }, ...prev]);
+      setTasks(prev => [{ id, ...newTask, createdAt: new Date() }, ...prev]);
     }
   }
 
   async function handleUpdateTask(taskId, updates) {
     // Optimistic UI update
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
-    
+
     if (user && !user.isDemo) {
       try {
         await updateTask(user.uid, taskId, updates);
       } catch (err) {
         console.error('Failed to update task:', err);
+        // Revert on failure — re-fetch would be cleaner but expensive
       }
     }
   }
@@ -295,12 +317,21 @@ function App() {
   function renderPage() {
     switch (activePage) {
       case 'dashboard':
-        return <Dashboard tasks={tasks} />;
+        return (
+          <Dashboard
+            resources={resources}
+            tasks={tasks}
+            user={user}
+            onNavigate={handleNavigate}
+            onToggleBookmark={handleToggleBookmark}
+          />
+        );
       case 'library':
         return (
           <Library
             resources={resources}
             loading={loadingResources}
+            error={resourceError}
             onOpenResource={handleOpenResource}
             onToggleBookmark={handleToggleBookmark}
             onAddResource={handleAddResource}
@@ -309,12 +340,13 @@ function App() {
         );
       case 'tasks':
         return (
-          <Tasks 
-            tasks={tasks} 
-            loading={loadingTasks} 
-            onAddTask={handleAddTask} 
-            onUpdateTask={handleUpdateTask} 
-            onDeleteTask={handleDeleteTask} 
+          <Tasks
+            tasks={tasks}
+            loading={loadingTasks}
+            error={taskError}
+            onAddTask={handleAddTask}
+            onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
           />
         );
       case 'ask':
@@ -335,6 +367,7 @@ function App() {
             <Library
               resources={resources}
               loading={loadingResources}
+              error={resourceError}
               onOpenResource={handleOpenResource}
               onToggleBookmark={handleToggleBookmark}
               onAddResource={handleAddResource}
@@ -342,11 +375,15 @@ function App() {
             />
           );
         }
+        // Always use the latest version of the resource from state (bookmark state may have changed)
         const currentResource = resources.find(r => r.id === selectedResource.id) || selectedResource;
         return (
           <ResourceDetails
             resource={currentResource}
             onBack={() => handleNavigate('library')}
+            onToggleBookmark={handleToggleBookmark}
+            onDeleteResource={handleDeleteResource}
+            onNavigate={handleNavigate}
           />
         );
       default:
@@ -416,6 +453,7 @@ function App() {
           activePage={activePage}
           theme={theme}
           onToggleTheme={handleToggleTheme}
+          user={user}
         />
         <div className="app-content">
           <div key={activePage} className="page-enter">

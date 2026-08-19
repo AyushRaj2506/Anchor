@@ -5,7 +5,6 @@ import {
   CheckSquare,
   MessageCircle,
   Bookmark,
-  Settings,
   LogOut,
   Anchor,
 } from 'lucide-react';
@@ -13,16 +12,16 @@ import './Sidebar.css';
 
 // Each nav item: lucide icon component, label, id
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard',      Icon: LayoutDashboard },
-  { id: 'library',   label: 'Library',        Icon: BookOpen        },
-  { id: 'tasks',     label: 'Tasks',          Icon: CheckSquare     },
-  { id: 'ask',       label: 'Ask My Knowledge', Icon: MessageCircle },
-  { id: 'bookmarks', label: 'Bookmarks',      Icon: Bookmark        },
+  { id: 'dashboard', label: 'Dashboard',        Icon: LayoutDashboard },
+  { id: 'library',   label: 'Library',          Icon: BookOpen        },
+  { id: 'tasks',     label: 'Tasks',            Icon: CheckSquare     },
+  { id: 'ask',       label: 'Ask My Knowledge', Icon: MessageCircle   },
+  { id: 'bookmarks', label: 'Bookmarks',        Icon: Bookmark        },
 ];
 
 function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
   const isDemo      = user?.isDemo;
-  const displayName = user?.name || 'Ayush Raj';
+  const displayName = user?.name || 'User';
   const displayRole = isDemo ? 'Demo Mode' : 'Student';
   const initial     = displayName.charAt(0).toUpperCase();
 
@@ -58,7 +57,7 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
             {NAV_ITEMS.map(({ id, label, Icon }) => (
               <li key={id}>
                 <button
-                  className={`sidebar-nav-item ${activePage === id ? 'sidebar-nav-item--active' : ''}`}
+                  className={`sidebar-nav-item ${activePage === id || (activePage === 'resource-details' && id === 'library') ? 'sidebar-nav-item--active' : ''}`}
                   onClick={() => { onNavigate(id); onClose(); }}
                   aria-current={activePage === id ? 'page' : undefined}
                 >
@@ -82,13 +81,9 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
             </div>
           </div>
 
-          <button className="sidebar-footer-item" aria-label="Go to Settings">
-            <Settings size={15} strokeWidth={2} aria-hidden="true" />
-            <span>Settings</span>
-          </button>
           <button
             className="sidebar-footer-item"
-            aria-label="Log out"
+            aria-label="Log out of Anchor"
             onClick={onLogout}
           >
             <LogOut size={15} strokeWidth={2} aria-hidden="true" />

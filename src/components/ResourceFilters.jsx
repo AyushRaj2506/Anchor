@@ -1,25 +1,31 @@
 import React from 'react';
-import { CATEGORIES, RESOURCE_TYPES } from '../data/libraryData';
 import './ResourceFilters.css';
 
 /**
  * ResourceFilters — the search + filter bar for the Library page.
  *
  * Props:
- *   search       — current search string
- *   onSearch     — called when search input changes
- *   category     — currently selected category ('all' or a category id)
- *   onCategory   — called when the category select changes
- *   type         — currently selected type ('all' or a type string)
- *   onType       — called when the type select changes
- *   sort         — currently selected sort ('newest' | 'oldest' | 'az')
- *   onSort       — called when sort select changes
+ *   search        — current search string
+ *   onSearch      — called when search input changes
+ *   category      — currently selected category ('all' or a category id)
+ *   onCategory    — called when the category select changes
+ *   type          — currently selected type ('all' or a type string)
+ *   onType        — called when the type select changes
+ *   sort          — currently selected sort ('newest' | 'oldest' | 'az')
+ *   onSort        — called when sort select changes
+ *   categories    — array of { id, label, count } computed from actual resources
+ *   resourceTypes — array of type strings computed from actual resources
+ *
+ * Category and type lists are passed in from Library.jsx where they are
+ * derived from the actual resources — no static data files imported here.
  */
 function ResourceFilters({
   search, onSearch,
   category, onCategory,
   type, onType,
   sort, onSort,
+  categories = [],
+  resourceTypes = [],
 }) {
   return (
     <div className="rf-bar" role="search" aria-label="Filter and search resources">
@@ -58,8 +64,8 @@ function ResourceFilters({
             aria-label="Filter by category"
           >
             <option value="all">All Categories</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.label}</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.label} ({cat.count})</option>
             ))}
           </select>
           <span className="rf-select-arrow" aria-hidden="true">▾</span>
@@ -76,7 +82,7 @@ function ResourceFilters({
             aria-label="Filter by resource type"
           >
             <option value="all">All Types</option>
-            {RESOURCE_TYPES.map((t) => (
+            {resourceTypes.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
@@ -99,12 +105,6 @@ function ResourceFilters({
           </select>
           <span className="rf-select-arrow" aria-hidden="true">▾</span>
         </div>
-
-        {/* Filter button — visual only for now */}
-        <button className="rf-filter-btn" aria-label="Open advanced filters">
-          <span aria-hidden="true">⊟</span>
-          <span>Filter</span>
-        </button>
       </div>
     </div>
   );

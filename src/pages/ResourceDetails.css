@@ -85,9 +85,36 @@
   padding: 6px 10px;
 }
 
+/* Bookmarked / active state */
+.rd-action-btn--active {
+  background: var(--color-accent-light, #e8f0e8);
+  border-color: var(--color-accent, #4a6741);
+  color: var(--color-accent, #4a6741);
+  font-weight: 500;
+}
+
+/* Danger / delete state */
+.rd-action-btn--danger {
+  color: var(--color-danger, #c0392b);
+  border-color: transparent;
+}
+
+.rd-action-btn--danger:hover {
+  background: #fde8e0;
+  border-color: var(--color-danger, #c0392b);
+}
+
 .rd-action-btn:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* Source URL link */
+.rd-source-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  word-break: break-all;
+  font-size: 0.875rem;
 }
 
 /* ===========================

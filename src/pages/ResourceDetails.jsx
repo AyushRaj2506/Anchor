@@ -1,56 +1,82 @@
 import React, { useState } from 'react';
-import { RESOURCE_DETAILS, DEFAULT_RESOURCE_DETAIL } from '../data/libraryData';
 import './ResourceDetails.css';
 
 /**
  * ResourceDetails — shows full information for a single resource.
  *
  * Props:
- *   resource   — the resource object from LIBRARY_RESOURCES (passed from Library/App)
- *   onBack     — function to call when "← Back to Library" is clicked
+ *   resource         — the resource object from Firestore (passed from Library/App)
+ *   onBack           — function to call when "← Back to Library" is clicked
+ *   onToggleBookmark — function(resourceId) to toggle bookmark state (persists to Firestore)
+ *   onDeleteResource — function(resourceId) to delete this resource
+ *   onNavigate       — function(pageId) to navigate between pages
  *
  * How it works:
- *   - Gets the resource's base info (title, category, type, tags, time) from `resource` prop
- *   - Looks up richer mock detail (summary, action items, deadlines…) from RESOURCE_DETAILS
- *   - Action items have local checkbox state (useState) — not connected to a database yet
- *   - Document preview is a styled CSS placeholder — no PDF library needed
+ *   - Shows data from the resource object itself (title, category, type, tags, description, sourceUrl)
+ *   - For real Firestore resources, fields like description may not exist — graceful fallbacks shown
+ *   - Action items are local UI state only (future milestone for persistence)
+ *   - Document preview is a styled CSS placeholder — no PDF library in scope
  */
-function ResourceDetails({ resource, onBack }) {
-  // Merge base resource with detail data (fall back to defaults for resources without details)
-  const detail = RESOURCE_DETAILS[resource.id] || DEFAULT_RESOURCE_DETAIL;
+function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource, onNavigate }) {
+  const {
+    id,
+    title,
+    category,
+    type,
+    typeIcon,
+    iconBg,
+    tags = [],
+    bookmarked,
+    sourceUrl,
+    description,
+    notes,
+    createdAt,
+  } = resource;
 
-  // Tags: start from the detail's tag list (may be richer than the library card tags)
-  const initialTags = detail.tags.length > 0 ? detail.tags : (resource.tags || []);
+  // Bookmark pop animation
+  const [bookmarkPopping, setBookmarkPopping] = useState(false);
 
-  // Local state for interactive action items (checkboxes)
-  const [actionItems, setActionItems] = useState(
-    detail.actionItems.map((item) => ({ ...item }))
-  );
+  function handleBookmarkToggle() {
+    setBookmarkPopping(true);
+    setTimeout(() => setBookmarkPopping(false), 240);
+    if (onToggleBookmark) onToggleBookmark(id);
+  }
 
-  // Local page number state for the document preview controls (visual only)
+  function handleDelete() {
+    if (window.confirm(`Delete "${title}"? This cannot be undone.`)) {
+      if (onDeleteResource) {
+        onDeleteResource(id);
+        // Navigation back to Library is handled by App.jsx after deletion
+      }
+    }
+  }
+
+  // Format the creation date for display
+  function formatDate(ts) {
+    if (!ts) return '—';
+    try {
+      // Firestore Timestamp has .toDate(), Date objects work directly
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      });
+    } catch {
+      return '—';
+    }
+  }
+
+  // Derive display summary — use resource.description if present, otherwise notes
+  const displaySummary = description || notes || null;
+
+  // Page navigation state for the document preview (visual UI)
   const [previewPage, setPreviewPage] = useState(1);
-  const totalPages = detail.previewPages || 1;
-
-  function toggleActionItem(id) {
-    setActionItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, done: !item.done } : item
-      )
-    );
-  }
-
-  function prevPage() {
-    setPreviewPage((p) => Math.max(1, p - 1));
-  }
-
-  function nextPage() {
-    setPreviewPage((p) => Math.min(totalPages, p + 1));
-  }
+  const totalPages = 1; // No real file access — visual placeholder
 
   return (
     <main className="rd-page" id="main-content" tabIndex={-1}>
 
-      {/* ── Back link ── */}
+      {/* ── Top bar: back button + actions ── */}
       <div className="rd-topbar">
         <button
           className="rd-back-btn"
@@ -60,16 +86,24 @@ function ResourceDetails({ resource, onBack }) {
           ← Back to Library
         </button>
 
-        {/* Header-level action buttons */}
         <div className="rd-header-actions">
-          <button className="rd-action-btn" aria-label="Bookmark this resource">
-            🔖 Bookmark
+          {/* Bookmark — fully functional, persists to Firestore */}
+          <button
+            className={`rd-action-btn ${bookmarked ? 'rd-action-btn--active' : ''} ${bookmarkPopping ? 'icon-pop' : ''}`}
+            aria-label={bookmarked ? 'Remove bookmark for this resource' : 'Bookmark this resource'}
+            aria-pressed={Boolean(bookmarked)}
+            onClick={handleBookmarkToggle}
+          >
+            {bookmarked ? '🔖 Bookmarked' : '🔖 Bookmark'}
           </button>
-          <button className="rd-action-btn" aria-label="Share this resource">
-            ↗ Share
-          </button>
-          <button className="rd-action-btn rd-action-btn--icon" aria-label="More options">
-            ⋯
+
+          {/* Delete — fully functional */}
+          <button
+            className="rd-action-btn rd-action-btn--danger"
+            aria-label={`Delete ${title}`}
+            onClick={handleDelete}
+          >
+            🗑 Delete
           </button>
         </div>
       </div>
@@ -84,137 +118,90 @@ function ResourceDetails({ resource, onBack }) {
           <div className="rd-hero card">
             <div
               className="rd-hero-icon"
-              style={{ background: resource.iconBg }}
+              style={{ background: iconBg || '#e8f0e8' }}
               aria-hidden="true"
             >
-              <span className="rd-hero-icon-emoji">{resource.typeIcon}</span>
+              <span className="rd-hero-icon-emoji">{typeIcon || '📋'}</span>
               <span className="rd-hero-icon-label">
-                {resource.type.toUpperCase().slice(0, 4)}
+                {(type || 'DOC').toUpperCase().slice(0, 4)}
               </span>
             </div>
 
             <div className="rd-hero-info">
-              <h1 className="rd-hero-title">{resource.title}</h1>
+              <h1 className="rd-hero-title">{title}</h1>
               <p className="rd-hero-meta">
-                <span className="rd-hero-meta-item">📁 {resource.category}</span>
+                <span className="rd-hero-meta-item">📁 {category || 'Uncategorized'}</span>
                 <span className="rd-hero-meta-dot" aria-hidden="true"> • </span>
-                <span className="rd-hero-meta-item">{resource.type} Document</span>
-                <span className="rd-hero-meta-dot" aria-hidden="true"> • </span>
-                <span className="rd-hero-meta-item">Added {resource.time}</span>
+                <span className="rd-hero-meta-item">{type || 'Document'}</span>
+                {createdAt && (
+                  <>
+                    <span className="rd-hero-meta-dot" aria-hidden="true"> • </span>
+                    <span className="rd-hero-meta-item">Added {formatDate(createdAt)}</span>
+                  </>
+                )}
               </p>
 
               {/* Tags row */}
-              <div className="rd-tag-row" aria-label="Resource tags">
-                {initialTags.map((tag) => (
-                  <span key={tag} className="rd-tag">{tag}</span>
-                ))}
-                <button className="rd-tag-add" aria-label="Add a new tag">
-                  + Add Tag
-                </button>
-              </div>
+              {tags.length > 0 && (
+                <div className="rd-tag-row" aria-label="Resource tags">
+                  {tags.map((tag) => (
+                    <span key={tag} className="rd-tag">{tag}</span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* ── Summary card ── */}
+          {/* ── Description / Summary card ── */}
           <section className="card rd-section" aria-labelledby="rd-summary-heading">
             <h2 id="rd-summary-heading" className="rd-section-title">
               <span className="rd-section-icon" aria-hidden="true">≡</span>
-              Summary
+              Description
             </h2>
-            <p className="rd-summary-text">{detail.summary}</p>
-          </section>
-
-          {/* ── Two-column grid: Important Info + Deadlines ── */}
-          <div className="rd-mid-grid">
-
-            {/* Important Information */}
-            <section className="card rd-section" aria-labelledby="rd-info-heading">
-              <h2 id="rd-info-heading" className="rd-section-title">
-                <span className="rd-section-icon rd-section-icon--green" aria-hidden="true">ℹ</span>
-                Important Information
-              </h2>
-              <ul className="rd-bullet-list" aria-label="Important points">
-                {detail.importantInfo.map((point, i) => (
-                  <li key={i} className="rd-bullet-item">{point}</li>
-                ))}
-              </ul>
-            </section>
-
-            {/* Deadlines */}
-            <section className="card rd-section" aria-labelledby="rd-deadlines-heading">
-              <h2 id="rd-deadlines-heading" className="rd-section-title">
-                <span className="rd-section-icon rd-section-icon--orange" aria-hidden="true">📅</span>
-                Deadlines
-              </h2>
-
-              {detail.deadlines.length === 0 ? (
-                <p className="rd-empty-hint">No deadlines linked yet.</p>
-              ) : (
-                <ul className="rd-deadline-list" aria-label="Linked deadlines">
-                  {detail.deadlines.map((dl) => (
-                    <li key={dl.id} className="rd-deadline-item">
-                      <span className="rd-deadline-dot" aria-hidden="true">●</span>
-                      <div className="rd-deadline-info">
-                        <span className="rd-deadline-title">{dl.title}</span>
-                        <span className="rd-deadline-date">{dl.date}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <button className="rd-add-btn" aria-label="Add a deadline">
-                + Add Deadline
-              </button>
-            </section>
-          </div>
-
-          {/* ── Action Items ── */}
-          <section className="card rd-section" aria-labelledby="rd-actions-heading">
-            <h2 id="rd-actions-heading" className="rd-section-title">
-              <span className="rd-section-icon" aria-hidden="true">☰</span>
-              Action Items
-            </h2>
-
-            {actionItems.length === 0 ? (
-              <p className="rd-empty-hint">No action items yet.</p>
+            {displaySummary ? (
+              <p className="rd-summary-text">{displaySummary}</p>
             ) : (
-              <ul className="rd-action-list" aria-label="Action items">
-                {actionItems.map((item) => (
-                  <li key={item.id} className="rd-action-item">
-                    <label className="rd-action-label">
-                      <input
-                        type="checkbox"
-                        className="rd-checkbox"
-                        checked={item.done}
-                        onChange={() => toggleActionItem(item.id)}
-                        aria-label={item.text}
-                      />
-                      <span className={`rd-action-text ${item.done ? 'rd-action-text--done' : ''}`}>
-                        {item.text}
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
+              <p className="rd-empty-hint">No description added for this resource yet.</p>
             )}
-
-            <button className="rd-add-btn" aria-label="Add an action item">
-              + Add Action Item
-            </button>
           </section>
+
+          {/* ── Source URL card (if applicable) ── */}
+          {sourceUrl && (
+            <section className="card rd-section" aria-labelledby="rd-url-heading">
+              <h2 id="rd-url-heading" className="rd-section-title">
+                <span className="rd-section-icon" aria-hidden="true">🔗</span>
+                Source URL
+              </h2>
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rd-source-link"
+                style={{
+                  color: 'var(--accent)',
+                  textDecoration: 'underline',
+                  wordBreak: 'break-all',
+                  fontSize: '0.875rem',
+                }}
+                aria-label={`Open source URL: ${sourceUrl}`}
+              >
+                {sourceUrl}
+              </a>
+            </section>
+          )}
 
           {/* ── Tags card ── */}
           <section className="card rd-section" aria-labelledby="rd-tags-heading">
             <h2 id="rd-tags-heading" className="rd-section-title">Tags</h2>
-            <div className="rd-tag-row">
-              {initialTags.map((tag) => (
-                <span key={tag} className="rd-tag">{tag}</span>
-              ))}
-              <button className="rd-tag-add" aria-label="Add a new tag">
-                + Add Tag
-              </button>
-            </div>
+            {tags.length > 0 ? (
+              <div className="rd-tag-row">
+                {tags.map((tag) => (
+                  <span key={tag} className="rd-tag">{tag}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="rd-empty-hint">No tags added for this resource.</p>
+            )}
           </section>
 
         </div>
@@ -222,25 +209,34 @@ function ResourceDetails({ resource, onBack }) {
         {/* ════ RIGHT COLUMN ════ */}
         <div className="rd-right">
 
-          {/* ── Document Preview ── */}
+          {/* ── Document Preview (visual placeholder — no file storage in scope) ── */}
           <section className="card rd-section rd-preview-card" aria-labelledby="rd-preview-heading">
             <div className="rd-preview-header">
               <h2 id="rd-preview-heading" className="rd-section-title">
                 <span aria-hidden="true">👁</span> Document Preview
               </h2>
-              <button className="rd-icon-btn" aria-label="Open document in full screen">
-                ↗
-              </button>
+              {sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rd-icon-btn"
+                  aria-label="Open source URL in new tab"
+                  style={{ textDecoration: 'none' }}
+                >
+                  ↗
+                </a>
+              )}
             </div>
 
             {/* Styled placeholder document */}
             <div
               className="rd-preview-area"
               role="img"
-              aria-label={`Document preview placeholder for ${resource.title}`}
+              aria-label={`Document preview placeholder for ${title}`}
             >
               <div className="rd-preview-doc">
-                <div className="rd-preview-doc-title">{resource.title.replace(/\.[^.]+$/, '')}</div>
+                <div className="rd-preview-doc-title">{title.replace(/\.[^.]+$/, '')}</div>
                 <div className="rd-preview-doc-line rd-preview-doc-line--heading">1. Introduction</div>
                 <div className="rd-preview-doc-line"></div>
                 <div className="rd-preview-doc-line rd-preview-doc-line--text"></div>
@@ -256,63 +252,69 @@ function ResourceDetails({ resource, onBack }) {
               </div>
             </div>
 
-            {/* Navigation controls */}
+            {/* Navigation controls (functional UI) */}
             <div className="rd-preview-controls" aria-label="Document page navigation">
               <button
                 className="rd-preview-ctrl-btn"
-                onClick={prevPage}
+                onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
                 disabled={previewPage <= 1}
                 aria-label="Previous page"
               >
                 ←
               </button>
               <span className="rd-preview-page-info" aria-live="polite">
-                {previewPage} / {totalPages || 1}
+                {previewPage} / {totalPages}
               </span>
               <button
                 className="rd-preview-ctrl-btn"
-                onClick={nextPage}
+                onClick={() => setPreviewPage(p => Math.min(totalPages, p + 1))}
                 disabled={previewPage >= totalPages}
                 aria-label="Next page"
               >
                 →
               </button>
-              <div className="rd-preview-zoom" aria-label="Zoom controls (visual placeholder)">
-                <button className="rd-preview-ctrl-btn" aria-label="Zoom out">−</button>
-                <span className="rd-preview-zoom-label">Zoom</span>
-                <button className="rd-preview-ctrl-btn" aria-label="Zoom in">+</button>
-              </div>
             </div>
           </section>
 
-          {/* ── Source / Original Resource ── */}
+          {/* ── Resource Metadata ── */}
           <section className="card rd-section rd-source-card" aria-labelledby="rd-source-heading">
             <h2 id="rd-source-heading" className="rd-section-title">
-              <span aria-hidden="true">🔗</span> Source / Original Resource
+              <span aria-hidden="true">📁</span> Resource Info
             </h2>
 
             <dl className="rd-source-list">
               <div className="rd-source-row">
-                <dt className="rd-source-label">File Name</dt>
-                <dd className="rd-source-value">{detail.fileName}</dd>
+                <dt className="rd-source-label">Title</dt>
+                <dd className="rd-source-value">{title}</dd>
               </div>
               <div className="rd-source-row">
-                <dt className="rd-source-label">Uploaded</dt>
-                <dd className="rd-source-value">{detail.uploadedOn}</dd>
+                <dt className="rd-source-label">Category</dt>
+                <dd className="rd-source-value">{category || '—'}</dd>
               </div>
               <div className="rd-source-row">
-                <dt className="rd-source-label">File Size</dt>
-                <dd className="rd-source-value">{detail.fileSize}</dd>
+                <dt className="rd-source-label">Type</dt>
+                <dd className="rd-source-value">{type || '—'}</dd>
               </div>
               <div className="rd-source-row">
-                <dt className="rd-source-label">Uploaded By</dt>
-                <dd className="rd-source-value">{detail.uploadedBy}</dd>
+                <dt className="rd-source-label">Added</dt>
+                <dd className="rd-source-value">{formatDate(createdAt)}</dd>
               </div>
+              {sourceUrl && (
+                <div className="rd-source-row">
+                  <dt className="rd-source-label">Source</dt>
+                  <dd className="rd-source-value" style={{ wordBreak: 'break-all' }}>
+                    <a
+                      href={sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      Open link ↗
+                    </a>
+                  </dd>
+                </div>
+              )}
             </dl>
-
-            <button className="rd-download-btn" aria-label={`Download ${detail.fileName}`}>
-              ↓ Download
-            </button>
           </section>
 
         </div>

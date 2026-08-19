@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import StatCard from '../components/StatCard';
 import ResourceCard from '../components/ResourceCard';
-import { BOOKMARK_STATS } from '../data/bookmarkData';
-import { CATEGORIES } from '../data/libraryData';
 import './Bookmarks.css';
 
 /**
@@ -100,8 +98,14 @@ function Bookmarks({ resources, onToggleBookmark, onOpenResource, onNavigateToLi
 
   // Unique types from the bookmarked resources
   const availableTypes = useMemo(() => {
-    const types = new Set(bookmarkedList.map(r => r.type));
+    const types = new Set(bookmarkedList.map(r => r.type).filter(Boolean));
     return Array.from(types);
+  }, [bookmarkedList]);
+
+  // Unique categories from the bookmarked resources (computed — not hardcoded)
+  const availableCategories = useMemo(() => {
+    const cats = new Set(bookmarkedList.map(r => r.category).filter(Boolean));
+    return Array.from(cats).sort();
   }, [bookmarkedList]);
 
   return (
@@ -164,8 +168,8 @@ function Bookmarks({ resources, onToggleBookmark, onOpenResource, onNavigateToLi
               aria-label="Filter bookmarks by category"
             >
               <option value="all">All Categories</option>
-              {CATEGORIES.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.label}</option>
+              {availableCategories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
             <span className="bm-select-arrow" aria-hidden="true">▾</span>

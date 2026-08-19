@@ -28,7 +28,7 @@ const PRIORITY_BADGE = {
   low:    { label: 'Low',    className: 'badge--low' },
 };
 
-function DeadlineList({ tasks = [] }) {
+function DeadlineList({ tasks = [], onNavigate }) {
   const upcoming = tasks
     .filter(t => t.deadlineMs && t.status !== 'completed')
     .sort((a, b) => a.deadlineMs - b.deadlineMs)
@@ -51,7 +51,11 @@ function DeadlineList({ tasks = [] }) {
     <div className="card deadline-card">
       <div className="card-header">
         <h2 className="card-title">Upcoming Deadlines</h2>
-        <button className="view-all-btn" aria-label="View all deadlines">
+        <button
+          className="view-all-btn"
+          aria-label="View all tasks and deadlines"
+          onClick={() => onNavigate && onNavigate('tasks')}
+        >
           View all
         </button>
       </div>

@@ -129,51 +129,9 @@ export const LIBRARY_RESOURCES = [
   },
 ];
 
-export const LIBRARY_STATS = [
-  {
-    id: 'total',
-    icon: '📂',
-    iconBg: '#e8f0e8',
-    label: 'Total Resources',
-    value: 128,
-    sub: '↑ 12 new this week',
-    subColor: '#4a6741',
-  },
-  {
-    id: 'pdfs',
-    icon: '📄',
-    iconBg: '#fde8e0',
-    label: 'PDFs',
-    value: 45,
-    sub: '35% of total',
-  },
-  {
-    id: 'notes',
-    icon: '📝',
-    iconBg: '#e3f0e3',
-    label: 'Notes',
-    value: 38,
-    sub: '30% of total',
-  },
-  {
-    id: 'links',
-    icon: '🔗',
-    iconBg: '#fef4e0',
-    label: 'Links',
-    value: 21,
-    sub: '16% of total',
-  },
-];
 
-export const CATEGORIES = [
-  { id: 'DBMS',                 label: 'DBMS',                 count: 28 },
-  { id: 'Operating System',     label: 'Operating System',     count: 24 },
-  { id: 'Computer Networks',    label: 'Computer Networks',    count: 27 },
-  { id: 'Web Development',      label: 'Web Development',      count: 19 },
-  { id: 'AI / ML',              label: 'AI / ML',              count: 16 },
-];
-
-// All unique resource types, used to populate the Type filter dropdown
+// All unique resource types — used as a static type list for Add Resource modal and Type filter
+// (UI configuration — not mock data records)
 export const RESOURCE_TYPES = ['PDF', 'Note', 'Image', 'URL', 'Document'];
 
 /**

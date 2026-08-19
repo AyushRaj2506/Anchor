@@ -9,9 +9,14 @@ import './Dashboard.css';
 /**
  * Dashboard page — shows a greeting, stat cards, and several sections.
  *
- * Each top-level section uses the .stagger-item class with an inline
- * animation-delay to create a subtle entrance cascade. The overall
- * page-enter animation is handled by the App.jsx wrapper.
+ * Props:
+ *   resources        — full array of user resources (from Firestore or demo data)
+ *   tasks            — full array of user tasks (from Firestore or demo data)
+ *   user             — current user object ({ name, isDemo, ... })
+ *   onNavigate       — function(pageId) to navigate between pages
+ *   onToggleBookmark — function(resourceId) to toggle bookmark state
+ *
+ * All statistics are derived from props — no hardcoded numbers.
  */
 
 function getGreeting() {
@@ -25,14 +30,18 @@ function getGreeting() {
 const STAGGER_BASE  = 40;
 const STAGGER_STEP  = 55;
 
-function Dashboard({ tasks = [] }) {
+function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookmark }) {
   const greeting = getGreeting();
 
-  const pendingTasks = tasks.filter(t => t.status === 'todo' || t.status === 'inprogress').length;
-  const inProgressTasks = tasks.filter(t => t.status === 'inprogress').length;
-
-  const activeDeadlines = tasks.filter(t => t.deadlineMs && t.status !== 'completed').sort((a, b) => a.deadlineMs - b.deadlineMs);
+  // Derive all stats from actual data — no hardcoded values
+  const resourceCount    = resources.length;
+  const pendingTasks     = tasks.filter(t => t.status === 'todo' || t.status === 'inprogress').length;
+  const inProgressTasks  = tasks.filter(t => t.status === 'inprogress').length;
+  const activeDeadlines  = tasks.filter(t => t.deadlineMs && t.status !== 'completed').sort((a, b) => a.deadlineMs - b.deadlineMs);
   const nextDeadlineTask = activeDeadlines.length > 0 ? activeDeadlines[0].title : 'None';
+
+  // Derive display name from user object
+  const displayName = user?.name || 'there';
 
   return (
     <main className="dashboard" id="main-content" tabIndex={-1}>
@@ -45,11 +54,15 @@ function Dashboard({ tasks = [] }) {
       >
         <div>
           <h2 id="greeting-heading" className="greeting-text">
-            {greeting}, Ayush 🌿
+            {greeting}, {displayName} 🌿
           </h2>
           <p className="greeting-sub">Let's make today productive.</p>
         </div>
-        <button className="add-resource-btn" aria-label="Add a new resource">
+        <button
+          className="add-resource-btn"
+          aria-label="Go to Library to add a new resource"
+          onClick={() => onNavigate && onNavigate('library')}
+        >
           + Add Resource
         </button>
       </section>
@@ -64,8 +77,8 @@ function Dashboard({ tasks = [] }) {
           icon="📋"
           iconBg="#e8f0e8"
           label="Resources"
-          value={128}
-          sub="12 new this week"
+          value={resourceCount}
+          sub={resourceCount === 1 ? '1 resource saved' : `${resourceCount} resources saved`}
         />
         <StatCard
           icon="✓"
@@ -92,10 +105,14 @@ function Dashboard({ tasks = [] }) {
         aria-label="Dashboard details"
       >
         <div className="dashboard-grid-left">
-          <ResourceList />
+          <ResourceList
+            resources={resources}
+            onNavigate={onNavigate}
+            onToggleBookmark={onToggleBookmark}
+          />
         </div>
         <div className="dashboard-grid-right">
-          <DeadlineList tasks={tasks} />
+          <DeadlineList tasks={tasks} onNavigate={onNavigate} />
         </div>
       </section>
 

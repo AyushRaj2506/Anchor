@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import TaskStats from '../components/TaskStats';
 import TaskFilters from '../components/TaskFilters';
 import TaskCard from '../components/TaskCard';
-import { KANBAN_COLUMNS } from '../data/taskData';
+import { KANBAN_COLUMNS, TASK_CATEGORIES, TASK_PRIORITIES } from '../data/taskData';
 import './Tasks.css';
 
 /**
@@ -16,11 +16,14 @@ import './Tasks.css';
  *   sort      — sort order ('duesoon' | 'newest')
  *
  * How filtering works:
- *   useMemo filters and sorts the TASKS array on every state change.
+ *   useMemo filters and sorts the tasks array on every state change.
  *   Then the filtered list is split by status into three Kanban columns.
  *   No external libraries — plain JavaScript.
+ *
+ * KANBAN_COLUMNS, TASK_CATEGORIES, TASK_PRIORITIES from taskData are static
+ * UI configuration — they are NOT mock task records and are kept intentionally.
  */
-function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
+function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask }) {
   const [search, setSearch]       = useState('');
   const [category, setCategory]   = useState('all');
   const [priority, setPriority]   = useState('all');
@@ -35,7 +38,7 @@ function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
       // Search: title or category
       if (q) {
         const inTitle    = task.title.toLowerCase().includes(q);
-        const inCategory = task.category.toLowerCase().includes(q);
+        const inCategory = (task.category || '').toLowerCase().includes(q);
         if (!inTitle && !inCategory) return false;
       }
 
@@ -53,37 +56,44 @@ function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
 
     // Sort
     if (sort === 'duesoon') {
-      result = [...result].sort((a, b) => a.deadlineMs - b.deadlineMs);
+      result = [...result].sort((a, b) => {
+        // Null deadlines go to the end
+        if (!a.deadlineMs && !b.deadlineMs) return 0;
+        if (!a.deadlineMs) return 1;
+        if (!b.deadlineMs) return -1;
+        return a.deadlineMs - b.deadlineMs;
+      });
     }
-    // 'newest' keeps original array order (data is inserted newest-first by id asc for todo/inprogress)
+    // 'newest' keeps original array order (inserted newest-first)
 
     return result;
-  }, [search, category, priority, status, sort]);
+  }, [tasks, search, category, priority, status, sort]); // tasks is in deps — fixes stale filter bug
 
   // ── Split into Kanban columns ────────────────────────────────────
-  // Each column gets the tasks that match its id ('todo', 'inprogress', 'completed')
   function getColumnTasks(colId) {
     return filtered.filter((t) => t.status === colId);
   }
 
   // ── Modal State ──
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newCategory, setNewCategory] = useState('Personal');
-  const [newPriority, setNewPriority] = useState('Medium');
-  const [newDeadline, setNewDeadline] = useState('');
+  const [newTitle, setNewTitle]         = useState('');
+  const [newCategory, setNewCategory]   = useState('Personal');
+  const [newPriority, setNewPriority]   = useState('Medium');
+  const [newDeadline, setNewDeadline]   = useState('');
 
   function handleAddSubmit() {
     if (!newTitle.trim()) return;
     if (onAddTask) {
       onAddTask({
-        title: newTitle.trim(),
-        category: newCategory,
-        priority: newPriority,
-        status: 'todo',
-        deadline: newDeadline ? new Date(newDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'No deadline',
+        title:      newTitle.trim(),
+        category:   newCategory,
+        priority:   newPriority,
+        status:     'todo',
+        deadline:   newDeadline
+          ? new Date(newDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+          : 'No deadline',
         deadlineMs: newDeadline ? new Date(newDeadline).getTime() : null,
-        bookmarked: false
+        bookmarked: false,
       });
     }
     setShowAddModal(false);
@@ -92,6 +102,9 @@ function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
     setNewPriority('Medium');
     setNewDeadline('');
   }
+
+  const hasNoTasks      = !loading && (tasks || []).length === 0;
+  const hasNoFiltered   = !loading && (tasks || []).length > 0 && filtered.length === 0;
 
   return (
     <main className="tasks-page" id="main-content" tabIndex={-1}>
@@ -102,12 +115,33 @@ function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
           <h1 id="tasks-page-title" className="tasks-title">Tasks</h1>
           <p className="tasks-subtitle">Stay on top of your work and deadlines.</p>
         </div>
-        <button className="tasks-add-btn" aria-label="Add a new task" onClick={() => setShowAddModal(true)}>
+        <button
+          className="tasks-add-btn"
+          aria-label="Add a new task"
+          onClick={() => setShowAddModal(true)}
+        >
           + Add Task
         </button>
       </section>
 
-      {/* ── Statistics ── */}
+      {/* ── Error banner ── */}
+      {error && (
+        <div
+          role="alert"
+          style={{
+            padding: '0.75rem 1rem',
+            marginBottom: '1rem',
+            borderRadius: '8px',
+            background: 'var(--color-danger-bg, #fde8e0)',
+            color: 'var(--color-danger, #c0392b)',
+            fontSize: '0.875rem',
+          }}
+        >
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* ── Statistics (computed from real tasks) ── */}
       <TaskStats tasks={tasks} />
 
       {/* ── Filters ── */}
@@ -122,13 +156,55 @@ function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
       {/* ── Kanban board ── */}
       <section className="kanban-board" aria-label="Kanban task board">
         {loading ? (
-          <div className="tasks-loading" style={{ padding: '2rem', textAlign: 'center', width: '100%', color: 'var(--text-secondary)' }}>
+          <div
+            className="tasks-loading"
+            style={{ padding: '2rem', textAlign: 'center', width: '100%', color: 'var(--text-secondary)' }}
+            role="status"
+            aria-live="polite"
+          >
             Loading your tasks...
           </div>
-        ) : tasks.length === 0 ? (
-          <div className="tasks-empty" style={{ padding: '2rem', textAlign: 'center', width: '100%', color: 'var(--text-secondary)' }}>
-            You don't have any tasks yet.
+
+        ) : hasNoTasks ? (
+          /* User has no tasks at all — primary empty state */
+          <div
+            style={{ padding: '3rem 2rem', textAlign: 'center', width: '100%', color: 'var(--text-secondary)' }}
+            role="status"
+            aria-live="polite"
+          >
+            <p style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</p>
+            <p style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text-primary)' }}>
+              No tasks yet
+            </p>
+            <p style={{ fontSize: '0.875rem', marginBottom: '1rem' }}>
+              Add your first task using the button above.
+            </p>
+            <button
+              onClick={() => setShowAddModal(true)}
+              style={{ padding: '0.5rem 1.25rem', borderRadius: '6px', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: '0.875rem' }}
+            >
+              + Add Task
+            </button>
           </div>
+
+        ) : hasNoFiltered ? (
+          /* Tasks exist but filters return nothing */
+          <div
+            style={{ padding: '2rem', textAlign: 'center', width: '100%', color: 'var(--text-secondary)' }}
+            role="status"
+            aria-live="polite"
+          >
+            <p style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text-primary)' }}>
+              No tasks match your filters
+            </p>
+            <button
+              onClick={() => { setSearch(''); setCategory('all'); setPriority('all'); setStatus('all'); }}
+              style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.875rem', marginTop: '0.5rem' }}
+            >
+              Clear filters
+            </button>
+          </div>
+
         ) : KANBAN_COLUMNS.map((col) => {
           const colTasks = getColumnTasks(col.id);
           return (
@@ -159,17 +235,18 @@ function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
                   </p>
                 ) : (
                   colTasks.map((task) => (
-                    <TaskCard 
-                      key={task.id} 
-                      task={task} 
+                    <TaskCard
+                      key={task.id}
+                      task={task}
                       onUpdateStatus={(newStatus) => onUpdateTask(task.id, { status: newStatus })}
                       onDelete={() => onDeleteTask(task.id)}
+                      onUpdateTask={onUpdateTask}
                     />
                   ))
                 )}
               </div>
 
-              {/* Column-level Add Task — subtle, secondary */}
+              {/* Column-level Add Task */}
               <div className="kanban-col-footer">
                 <button
                   className="kanban-add-btn"
@@ -184,53 +261,94 @@ function Tasks({ tasks, loading, onAddTask, onUpdateTask, onDeleteTask }) {
         })}
       </section>
 
-      {/* Add Task Modal Overlay */}
+      {/* ── Add Task Modal ── */}
       {showAddModal && (
-        <div className="lib-modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div className="card" style={{ padding: '2rem', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>Add New Task</h3>
-            <input 
-              type="text" 
-              placeholder="Task Title" 
-              value={newTitle} 
-              onChange={e => setNewTitle(e.target.value)} 
-              style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-              autoFocus
-            />
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <select value={newCategory} onChange={e => setNewCategory(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-                <option value="Personal">Personal</option>
-                <option value="DBMS">DBMS</option>
-                <option value="Computer Networks">Computer Networks</option>
-                <option value="Operating System">Operating System</option>
-                <option value="Web Development">Web Development</option>
-                <option value="AI / ML">AI / ML</option>
-                <option value="Mathematics">Mathematics</option>
-              </select>
-              <select value={newPriority} onChange={e => setNewPriority(e.target.value)} style={{ flex: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
+        <div
+          className="lib-modal-overlay"
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-task-dialog-title"
+        >
+          <div
+            className="card"
+            style={{ padding: '2rem', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '1rem' }}
+          >
+            <h3 id="add-task-dialog-title" style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>
+              Add New Task
+            </h3>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-title">
+                Title *
+              </label>
+              <input
+                id="add-task-title"
+                type="text"
+                placeholder="Task Title"
+                value={newTitle}
+                onChange={e => setNewTitle(e.target.value)}
+                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') handleAddSubmit(); if (e.key === 'Escape') setShowAddModal(false); }}
+              />
             </div>
-            <input 
-              type="datetime-local" 
-              value={newDeadline} 
-              onChange={e => setNewDeadline(e.target.value)} 
-              style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
-              <button 
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-category">
+                  Category
+                </label>
+                <select
+                  id="add-task-category"
+                  value={newCategory}
+                  onChange={e => setNewCategory(e.target.value)}
+                  style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
+                >
+                  {TASK_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-priority">
+                  Priority
+                </label>
+                <select
+                  id="add-task-priority"
+                  value={newPriority}
+                  onChange={e => setNewPriority(e.target.value)}
+                  style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
+                >
+                  {TASK_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-deadline">
+                Deadline <span style={{ fontWeight: 'normal' }}>(optional)</span>
+              </label>
+              <input
+                id="add-task-deadline"
+                type="datetime-local"
+                value={newDeadline}
+                onChange={e => setNewDeadline(e.target.value)}
+                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.25rem' }}>
+              <button
                 onClick={() => setShowAddModal(false)}
                 style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleAddSubmit}
                 disabled={!newTitle.trim()}
                 style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: !newTitle.trim() ? 0.5 : 1 }}

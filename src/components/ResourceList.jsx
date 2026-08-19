@@ -3,127 +3,102 @@ import { Bookmark, MoreHorizontal } from 'lucide-react';
 import './ResourceList.css';
 
 /**
- * Mock resource data for the Dashboard.
- * In future milestones this will come from a real database.
+ * ResourceList — "Recent Resources" card on the Dashboard.
+ *
+ * Props:
+ *   resources        — full resources array from Firestore / demo data (passed from Dashboard)
+ *   onNavigate       — function(pageId) to navigate between pages
+ *   onToggleBookmark — function(resourceId) to toggle bookmark (persists to Firestore for real users)
+ *
+ * Shows the 5 most recent resources (first 5 from the array, which is already sorted
+ * newest-first by the Firestore query). If there are no resources, shows an empty state.
  */
-const RECENT_RESOURCES = [
-  {
-    id: 1,
-    title: 'Database Normalization.pdf',
-    category: 'DBMS',
-    type: 'PDF',
-    typeIcon: '📄',
-    iconBg: '#fde8e0',
-    time: '2h ago',
-  },
-  {
-    id: 2,
-    title: 'Operating System – Important Notes',
-    category: 'OS',
-    type: 'Note',
-    typeIcon: '📝',
-    iconBg: '#e3f0e3',
-    time: 'Yesterday',
-  },
-  {
-    id: 3,
-    title: 'CN Topology Diagram.png',
-    category: 'Computer Networks',
-    type: 'Image',
-    typeIcon: '🖼',
-    iconBg: '#e0ebf5',
-    time: '2 days ago',
-  },
-  {
-    id: 4,
-    title: 'React useEffect Explained',
-    category: 'Web Dev',
-    type: 'URL',
-    typeIcon: '🔗',
-    iconBg: '#fef4e0',
-    time: '3 days ago',
-  },
-  {
-    id: 5,
-    title: 'AI Project Requirements.md',
-    category: 'AI',
-    type: 'Note',
-    typeIcon: '📋',
-    iconBg: '#ede3f5',
-    time: '5 days ago',
-  },
-];
-
-function ResourceList() {
-  const [bookmarkedIds, setBookmarkedIds] = useState({});
+function ResourceList({ resources = [], onNavigate, onToggleBookmark }) {
   const [poppingId, setPoppingId] = useState(null);
 
-  function toggleBookmark(id) {
-    setBookmarkedIds(prev => ({ ...prev, [id]: !prev[id] }));
-    setPoppingId(id);
+  // Show up to 5 most recent resources (array is already newest-first from Firestore)
+  const recent = resources.slice(0, 5);
+
+  function handleToggle(e, resource) {
+    e.stopPropagation();
+    setPoppingId(resource.id);
     setTimeout(() => setPoppingId(null), 240);
+    if (onToggleBookmark) onToggleBookmark(resource.id);
   }
 
   return (
     <div className="card resource-list-card">
       <div className="card-header">
         <h2 className="card-title">Recent Resources</h2>
-        <button className="view-all-btn" aria-label="View all resources">
+        <button
+          className="view-all-btn"
+          aria-label="View all resources in Library"
+          onClick={() => onNavigate && onNavigate('library')}
+        >
           View all
         </button>
       </div>
 
-      <ul className="resource-list" role="list" aria-label="Recent resources">
-        {RECENT_RESOURCES.map((resource) => {
-          const isBookmarked = Boolean(bookmarkedIds[resource.id]);
-          const isPopping = poppingId === resource.id;
+      {recent.length === 0 ? (
+        <div
+          style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}
+          role="status"
+          aria-live="polite"
+        >
+          <p style={{ marginBottom: '0.5rem' }}>No resources yet.</p>
+          <button
+            style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.875rem', textDecoration: 'underline' }}
+            onClick={() => onNavigate && onNavigate('library')}
+          >
+            Add your first resource →
+          </button>
+        </div>
+      ) : (
+        <ul className="resource-list" role="list" aria-label="Recent resources">
+          {recent.map((resource) => {
+            const isBookmarked = Boolean(resource.bookmarked);
+            const isPopping    = poppingId === resource.id;
 
-          return (
-            <li key={resource.id} className="resource-item">
-              {/* Type icon box */}
-              <div
-                className="resource-icon"
-                style={{ background: resource.iconBg }}
-                aria-hidden="true"
-              >
-                {resource.typeIcon}
-              </div>
-
-              {/* Title + category */}
-              <div className="resource-info">
-                <span className="resource-title">{resource.title}</span>
-                <span className="resource-meta">
-                  {resource.category} &bull; {resource.type}
-                </span>
-              </div>
-
-              {/* Time + actions */}
-              <div className="resource-actions">
-                <span className="resource-time">{resource.time}</span>
-                <button
-                  className={`resource-icon-btn ${isBookmarked ? 'resource-bookmark--active' : ''} ${isPopping ? 'icon-pop' : ''}`}
-                  aria-label={isBookmarked ? `Remove bookmark for ${resource.title}` : `Bookmark ${resource.title}`}
-                  aria-pressed={isBookmarked}
-                  onClick={() => toggleBookmark(resource.id)}
+            return (
+              <li key={resource.id} className="resource-item">
+                {/* Type icon box */}
+                <div
+                  className="resource-icon"
+                  style={{ background: resource.iconBg || '#e8f0e8' }}
+                  aria-hidden="true"
                 >
-                  <Bookmark
-                    size={13}
-                    strokeWidth={isBookmarked ? 2.5 : 2}
-                    fill={isBookmarked ? 'currentColor' : 'none'}
-                    aria-hidden="true"
-                  />
-                </button>
-                <button
-                  className="resource-icon-btn"
-                  aria-label={`More options for ${resource.title}`}
-                >
-                  <MoreHorizontal size={13} strokeWidth={2} aria-hidden="true" />
-                </button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+                  {resource.typeIcon || '📋'}
+                </div>
+
+                {/* Title + category */}
+                <div className="resource-info">
+                  <span className="resource-title">{resource.title}</span>
+                  <span className="resource-meta">
+                    {resource.category || 'Uncategorized'} &bull; {resource.type || 'Document'}
+                  </span>
+                </div>
+
+                {/* Actions */}
+                <div className="resource-actions">
+                  <button
+                    className={`resource-icon-btn ${isBookmarked ? 'resource-bookmark--active' : ''} ${isPopping ? 'icon-pop' : ''}`}
+                    aria-label={isBookmarked ? `Remove bookmark for ${resource.title}` : `Bookmark ${resource.title}`}
+                    aria-pressed={isBookmarked}
+                    onClick={(e) => handleToggle(e, resource)}
+                  >
+                    <Bookmark
+                      size={13}
+                      strokeWidth={isBookmarked ? 2.5 : 2}
+                      fill={isBookmarked ? 'currentColor' : 'none'}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
