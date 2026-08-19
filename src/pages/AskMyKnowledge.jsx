@@ -1,46 +1,40 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SUGGESTED_QUESTIONS, MOCK_SOURCES, TIPS, PREDEFINED_ANSWERS } from '../data/knowledgeData';
+import { SUGGESTED_QUESTIONS, TIPS } from '../data/knowledgeData';
+import { searchKnowledge } from '../services/relevance';
+import { askQuestion } from '../services/ai';
 import './AskMyKnowledge.css';
 
 /**
- * AskMyKnowledge - Chat and Q&A page with the user's saved second brain resources.
+ * AskMyKnowledge - Chat and Q&A page grounded in user's saved resources and tasks.
  */
-function AskMyKnowledge({ onOpenResource }) {
+function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate }) {
   const [messages, setMessages] = useState([
     {
-      id: 'm1',
-      role: 'user',
-      content: 'What are my DBMS assignments and their deadlines?',
-      time: '10:24 AM',
-    },
-    {
-      id: 'm2',
+      id: 'init',
       role: 'assistant',
-      content: `Here are the DBMS assignments I found in your resources:
-
-• **DBMS Assignment**
-  Due Date: May 15, 2024 at 11:59 PM
-  Source: Database Normalization.pdf
-
-This assignment is about normalization, functional dependencies, candidate keys, and normal forms.`,
-      note: 'Note: I searched your resources and found 1 DBMS assignment. If you have other DBMS assignments that are not in your resources, I couldn\'t find information about them.',
-      time: '10:24 AM',
-      sourceIds: [1, 6],
-    },
+      content: 'Ask questions about your saved resources and tasks. I will answer using only your knowledge.',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [typingText, setTypingText] = useState('Searching your knowledge...');
+  const [activeSources, setActiveSources] = useState([]);
   const messagesEndRef = useRef(null);
 
+  // Clear messages on mount to start fresh, or keep the initial greeting
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  function handleSend(textToSend) {
+  async function handleSend(textToSend) {
     const trimmed = (textToSend || inputValue).trim();
-    if (!trimmed) return;
+    if (!trimmed || isTyping) return;
 
-    // Add user message
+    // Reset previous sources for the new query
+    setActiveSources([]);
+
+    // 1. Add User Message
     const userMsgId = 'u-' + Date.now();
     const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMessage = {
@@ -53,38 +47,104 @@ This assignment is about normalization, functional dependencies, candidate keys,
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
+    setTypingText('Searching your knowledge...');
 
-    // Simulate AI thinking and response
+    // 2. Local Relevance Filtering
+    const context = searchKnowledge(trimmed, resources, tasks);
+    const hasResources = context.resources && context.resources.length > 0;
+    const hasTasks = context.tasks && context.tasks.length > 0;
+
+    // Cost control/No-result behavior: If no context matches, bypass Gemini entirely
+    if (!hasResources && !hasTasks) {
+      setTimeout(() => {
+        setIsTyping(false);
+        const assistantMsgId = 'a-' + Date.now();
+        const noResultMessage = {
+          id: assistantMsgId,
+          role: 'assistant',
+          content: "I couldn't find information related to your question in your saved resources or tasks.\n\nTry asking about a resource, subject, placement notice, internship, or task you've saved.",
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages((prev) => [...prev, noResultMessage]);
+      }, 800);
+      return;
+    }
+
+    // 3. Switch loading state text
     setTimeout(() => {
-      setIsTyping(false);
-      const normalizedQuery = trimmed.toLowerCase().replace(/[?.!]$/, '');
-      const matched = PREDEFINED_ANSWERS[normalizedQuery];
-
-      let assistantMessage;
-      if (matched) {
-        assistantMessage = {
-          id: 'a-' + Date.now(),
-          role: 'assistant',
-          content: matched.answer,
-          note: matched.note,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          sourceIds: matched.sources,
-        };
-      } else {
-        assistantMessage = {
-          id: 'a-' + Date.now(),
-          role: 'assistant',
-          content: `I'll search your saved resources for: "${trimmed}". 
-
-AI processing and semantic RAG search will be connected in a later milestone. Currently, I'm simulating finding resources for this topic.`,
-          note: 'Note: AI engine is currently offline (UI Only mode).',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          sourceIds: [1], // fallback source
-        };
+      if (isTyping) {
+        setTypingText('Generating answer...');
       }
+    }, 600);
+
+    // 4. Call Vercel Ask API
+    try {
+      setTypingText('Generating answer...');
+      const response = await askQuestion(trimmed, context);
+      
+      setIsTyping(false);
+      const assistantMsgId = 'a-' + Date.now();
+      const assistantMessage = {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: response.answer,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    }, 1000);
+
+      // 5. Map validated sources back to their full local resource/task metadata objects
+      if (response.sources && response.sources.length > 0) {
+        const resolvedSources = response.sources.map(src => {
+          if (src.type === 'resource') {
+            const found = resources.find(r => r.id.toString() === src.id.toString());
+            if (found) {
+              return {
+                id: found.id,
+                title: found.title,
+                type: found.type || 'Document',
+                typeIcon: found.typeIcon || '📋',
+                iconBg: found.iconBg || '#e8f0e8',
+                excerpt: found.description || found.notes || 'No description added.',
+                location: found.category || 'Library',
+                original: found,
+                sourceType: 'resource'
+              };
+            }
+          } else if (src.type === 'task') {
+            const found = tasks.find(t => t.id.toString() === src.id.toString());
+            if (found) {
+              return {
+                id: found.id,
+                title: found.title,
+                type: 'Task',
+                typeIcon: '☑',
+                iconBg: '#fef4e0',
+                excerpt: found.description || 'No description added.',
+                location: `${found.status || 'todo'} • ${found.priority || 'Medium'}`,
+                original: found,
+                sourceType: 'task'
+              };
+            }
+          }
+          return null;
+        }).filter(Boolean);
+
+        setActiveSources(resolvedSources);
+      }
+
+    } catch (err) {
+      console.error('Ask My Knowledge failed:', err);
+      setIsTyping(false);
+      const assistantMsgId = 'a-' + Date.now();
+      const errorMessage = {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: "Sorry, I couldn't answer that right now. Please try again.",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    }
   }
 
   function handleKeyPress(e) {
@@ -100,7 +160,7 @@ AI processing and semantic RAG search will be connected in a later milestone. Cu
       <section className="ak-header" aria-labelledby="ak-page-title">
         <div>
           <h1 id="ak-page-title" className="ak-title">Ask My Knowledge</h1>
-          <p className="ak-subtitle">Ask anything about your saved resources. I'll answer using only your knowledge.</p>
+          <p className="ak-subtitle">Ask anything about your saved resources and tasks. I'll answer using only your knowledge.</p>
         </div>
       </section>
 
@@ -119,6 +179,7 @@ AI processing and semantic RAG search will be connected in a later milestone. Cu
                   key={idx}
                   className="ak-chip-btn"
                   onClick={() => setInputValue(q)}
+                  disabled={isTyping}
                   aria-label={`Ask suggested question: ${q}`}
                 >
                   {q}
@@ -154,22 +215,10 @@ AI processing and semantic RAG search will be connected in a later milestone. Cu
                               }
                               return <p key={lidx}>{line}</p>;
                             })}
-
-                            {msg.note && (
-                              <div className="ak-msg-note">
-                                <span className="ak-note-info-icon" aria-hidden="true">ℹ</span>
-                                <span>{msg.note}</span>
-                              </div>
-                            )}
                           </div>
 
                           <div className="ak-msg-footer">
                             <span className="ak-msg-time">{msg.time}</span>
-                            <div className="ak-msg-feedback">
-                              <button className="ak-feedback-btn" aria-label="Copy response">📋</button>
-                              <button className="ak-feedback-btn" aria-label="Good response">👍</button>
-                              <button className="ak-feedback-btn" aria-label="Bad response">👎</button>
-                            </div>
                           </div>
                         </div>
                       </>
@@ -197,10 +246,15 @@ AI processing and semantic RAG search will be connected in a later milestone. Cu
                   <div className="ak-avatar ak-avatar--assistant" aria-hidden="true">
                     ✨
                   </div>
-                  <div className="ak-typing-indicator" aria-label="Anchor is searching resources...">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="ak-typing-indicator" aria-label={typingText}>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginLeft: '12px' }}>
+                      {typingText}
+                    </span>
                   </div>
                 </div>
               )}
@@ -219,17 +273,19 @@ AI processing and semantic RAG search will be connected in a later milestone. Cu
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyPress}
+                disabled={isTyping}
                 rows={1}
               />
               <div className="ak-composer-actions">
                 <div className="ak-composer-left-actions">
-                  <button className="ak-composer-btn" aria-label="Attach file placeholder">📎</button>
-                  <button className="ak-composer-btn" aria-label="Filter parameters placeholder">🎛</button>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginLeft: '6px' }}>
+                    Single-question session
+                  </span>
                 </div>
                 <button
                   className="ak-send-btn"
                   onClick={() => handleSend()}
-                  disabled={!inputValue.trim()}
+                  disabled={!inputValue.trim() || isTyping}
                   aria-label="Send question"
                 >
                   🚀
@@ -239,7 +295,7 @@ AI processing and semantic RAG search will be connected in a later milestone. Cu
           </div>
           
           <div className="ak-disclaimer">
-            <span>🛡 Answers are based only on your uploaded resources. I don't use external information.</span>
+            <span>🛡 Answers are based only on your saved resources and tasks. Anchor does not use external knowledge.</span>
           </div>
         </div>
 
@@ -251,34 +307,48 @@ AI processing and semantic RAG search will be connected in a later milestone. Cu
               <h2 id="ak-sources-heading" className="ak-right-title">
                 📄 Sources
               </h2>
-              <span className="ak-right-subtitle">Based on your resources</span>
+              <span className="ak-right-subtitle">Based on your saved items</span>
             </div>
 
             <div className="ak-sources-list">
-              {MOCK_SOURCES.map((source) => (
-                <div key={source.id} className="ak-source-card">
-                  <div className="ak-source-top">
-                    <div className="ak-source-type-badge" style={{ background: source.iconBg }}>
-                      {source.typeIcon} {source.type}
+              {activeSources.length > 0 ? (
+                activeSources.map((source) => (
+                  <div key={source.id} className="ak-source-card">
+                    <div className="ak-source-top">
+                      <div className="ak-source-type-badge" style={{ background: source.iconBg }}>
+                        {source.typeIcon} {source.type}
+                      </div>
+                      <button
+                        className="ak-source-open-btn"
+                        onClick={() => {
+                          if (source.sourceType === 'resource') {
+                            onOpenResource(source.original);
+                          } else if (source.sourceType === 'task') {
+                            onNavigate('tasks');
+                          }
+                        }}
+                        aria-label={`Open details for ${source.title}`}
+                      >
+                        ↗
+                      </button>
                     </div>
-                    <button
-                      className="ak-source-open-btn"
-                      onClick={() => onOpenResource({ id: source.id, title: source.title, type: source.type, typeIcon: source.typeIcon, iconBg: source.iconBg, tags: [], category: 'DBMS', time: '2 hours ago' })}
-                      aria-label={`Open details for ${source.title}`}
-                    >
-                      ↗
-                    </button>
+                    <h3 className="ak-source-filename">{source.title}</h3>
+                    {source.location && <span className="ak-source-location">{source.location}</span>}
+                    <p className="ak-source-excerpt">{source.excerpt}</p>
                   </div>
-                  <h3 className="ak-source-filename">{source.title}</h3>
-                  {source.location && <span className="ak-source-location">{source.location}</span>}
-                  <p className="ak-source-excerpt">{source.excerpt}</p>
+                ))
+              ) : (
+                <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.88rem', fontStyle: 'italic' }}>
+                  No sources cited yet.
                 </div>
-              ))}
+              )}
             </div>
 
-            <button className="ak-view-all-sources" aria-label="View all sources (3)">
-              View all sources (3) ›
-            </button>
+            {activeSources.length > 0 && (
+              <div className="ak-view-all-sources" style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', textAlign: 'center', paddingTop: '8px' }}>
+                Cited {activeSources.length} source(s)
+              </div>
+            )}
           </section>
 
           {/* Tips panel */}

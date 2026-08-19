@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import dotenv from 'dotenv'
 import fs from 'fs'
+import path from 'path'
+import { pathToFileURL } from 'url'
 
 // Load environment variables for local backend simulation
 if (fs.existsSync('.env.local')) {
@@ -15,7 +17,7 @@ const localApiPlugin = () => ({
   name: 'local-api',
   configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
-      if (req.url === '/api/ai/analyze' && req.method === 'POST') {
+      if ((req.url === '/api/ai/analyze' || req.url === '/api/ai/ask') && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
@@ -23,8 +25,11 @@ const localApiPlugin = () => ({
             const parsedBody = JSON.parse(body);
             const mockReq = { method: 'POST', body: parsedBody };
             
-            // Dynamically import the Vercel handler
-            const handlerModule = await import('./api/ai/analyze.js');
+            // Resolve absolute path to the local API file to avoid Vite temp resolution issues
+            const relativePath = req.url === '/api/ai/analyze' ? 'api/ai/analyze.js' : 'api/ai/ask.js';
+            const absolutePath = path.resolve(process.cwd(), relativePath);
+            // Append cache buster to prevent ESM import caching in Node during development
+            const handlerModule = await import(pathToFileURL(absolutePath).href + '?t=' + Date.now());
             const handler = handlerModule.default;
 
             const mockRes = {

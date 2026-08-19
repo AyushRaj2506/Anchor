@@ -37,6 +37,17 @@ export async function analyzeResource(resource) {
 }
 
 /**
+ * Sends a grounded Q&A query with relevance context to the AI backend.
+ * 
+ * @param {string} question - User's question text.
+ * @param {Object} context - relevance context containing resources and tasks arrays.
+ * @returns {Promise<Object>} Grounded structured response
+ */
+export async function askQuestion(question, context) {
+  return fetchAI('/api/ai/ask', { question, context });
+}
+
+/**
  * Helper to fetch from local/deployed AI endpoint.
  */
 async function fetchAI(url, payload) {

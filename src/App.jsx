@@ -375,7 +375,14 @@ function App() {
           />
         );
       case 'ask':
-        return <AskMyKnowledge onOpenResource={handleOpenResource} />;
+        return (
+          <AskMyKnowledge
+            resources={resources}
+            tasks={tasks}
+            onOpenResource={handleOpenResource}
+            onNavigate={handleNavigate}
+          />
+        );
       case 'bookmarks':
         return (
           <Bookmarks
