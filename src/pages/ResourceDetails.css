@@ -740,3 +740,114 @@
   to { transform: rotate(360deg); }
 }
 
+/* ── PDF Preview Card ── */
+.rd-preview-pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 250px;
+  padding: 2rem;
+  text-align: center;
+  background: var(--color-surface-secondary);
+}
+
+.rd-pdf-icon {
+  font-size: 3.5rem;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+  margin-bottom: 4px;
+}
+
+.rd-pdf-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.rd-pdf-filename {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
+  word-break: break-all;
+}
+
+.rd-pdf-type {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-accent);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rd-pdf-size {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.rd-pdf-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.rd-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  border: none;
+  font-family: inherit;
+}
+
+.rd-pdf-btn-primary {
+  background: var(--color-accent);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(74, 103, 65, 0.2);
+}
+
+.rd-pdf-btn-primary:hover:not(.disabled) {
+  background: var(--color-accent-hover, #3a5233);
+  transform: translateY(-1px);
+}
+
+.rd-pdf-btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.rd-pdf-btn-secondary:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+}
+
+.rd-pdf-btn:disabled, .rd-pdf-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Image Preview ── */
+.rd-preview-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  min-height: 250px;
+  background: var(--color-surface-secondary);
+}
+

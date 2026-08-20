@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './ResourceDetails.css';
 import { analyzeResource } from '../services/ai';
+import { auth } from '../config/firebase';
+import { getDownloadUrl } from '../services/storage';
 
 /**
  * ResourceDetails — shows full information for a single resource.
@@ -27,7 +29,6 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
     type,
     typeIcon,
     iconBg,
-    tags = [],
     bookmarked,
     sourceUrl,
     description,
@@ -49,6 +50,30 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
   // AI analysis state
   const [analyzing, setAnalyzing] = useState(false);
   const [aiError, setAiError] = useState(null);
+
+  // Signed URL state
+  const [signedUrl, setSignedUrl] = useState(null);
+
+  // Fetch signed download URL if resource is saved in Supabase
+  useEffect(() => {
+    const isDemo = JSON.parse(localStorage.getItem('anchor-user') || '{}').isDemo;
+    if (resource.storagePath && !isDemo && auth.currentUser) {
+      let active = true;
+      async function fetchSignedUrl() {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          const url = await getDownloadUrl(resource.storagePath, idToken);
+          if (active) {
+            setSignedUrl(url);
+          }
+        } catch (err) {
+          console.error('Failed to fetch signed download URL:', err);
+        }
+      }
+      fetchSignedUrl();
+      return () => { active = false; };
+    }
+  }, [resource.storagePath]);
 
   async function handleAnalyze() {
     setAnalyzing(true);
@@ -116,6 +141,10 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
 
   // Derive display summary — use resource.description if present, otherwise notes
   const displaySummary = description || notes || null;
+
+  const tags = Array.isArray(resource.tags) 
+    ? resource.tags 
+    : (typeof resource.tags === 'string' && resource.tags.trim() ? resource.tags.split(',').map(t=>t.trim()).filter(Boolean) : []);
 
   // Page navigation state for the document preview (visual UI)
   const [previewPage, setPreviewPage] = useState(1);
@@ -189,12 +218,12 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
             <div className="rd-hero-info">
               <h1 className="rd-hero-title">{title}</h1>
               <p className="rd-hero-meta">
-                <span className="rd-hero-meta-item">📁 {category || 'Uncategorized'}</span>
-                <span className="rd-hero-meta-dot" aria-hidden="true"> • </span>
+                <span className="rd-hero-meta-item">{category || 'Uncategorized'}</span>
+                <span className="rd-hero-meta-dot" aria-hidden="true"> · </span>
                 <span className="rd-hero-meta-item">{type || 'Document'}</span>
                 {createdAt && (
                   <>
-                    <span className="rd-hero-meta-dot" aria-hidden="true"> • </span>
+                    <br />
                     <span className="rd-hero-meta-item">Added {formatDate(createdAt)}</span>
                   </>
                 )}
@@ -357,19 +386,19 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
         {/* ════ RIGHT COLUMN ════ */}
         <div className="rd-right">
 
-          {/* ── Document Preview (visual placeholder — no file storage in scope) ── */}
+          {/* ── Document Preview (renders actual file via signed URL, or visual placeholder) ── */}
           <section className="card rd-section rd-preview-card" aria-labelledby="rd-preview-heading">
             <div className="rd-preview-header">
               <h2 id="rd-preview-heading" className="rd-section-title">
                 <span aria-hidden="true">👁</span> Document Preview
               </h2>
-              {sourceUrl && (
+              {(signedUrl || sourceUrl) && (
                 <a
-                  href={sourceUrl}
+                  href={signedUrl || sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rd-icon-btn"
-                  aria-label="Open source URL in new tab"
+                  aria-label={signedUrl ? "Open document in new tab" : "Open source URL in new tab"}
                   style={{ textDecoration: 'none' }}
                 >
                   ↗
@@ -377,51 +406,103 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
               )}
             </div>
 
-            {/* Styled placeholder document */}
-            <div
-              className="rd-preview-area"
-              role="img"
-              aria-label={`Document preview placeholder for ${title}`}
-            >
-              <div className="rd-preview-doc">
-                <div className="rd-preview-doc-title">{title.replace(/\.[^.]+$/, '')}</div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--heading">1. Introduction</div>
-                <div className="rd-preview-doc-line"></div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--text"></div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--text rd-preview-doc-line--short"></div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--text"></div>
-                <div className="rd-preview-doc-line"></div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--heading">2. Key Concepts</div>
-                <div className="rd-preview-doc-line"></div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--text rd-preview-doc-line--short"></div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--text"></div>
-                <div className="rd-preview-doc-line rd-preview-doc-line--text rd-preview-doc-line--medium"></div>
-                <div className="rd-preview-doc-line"></div>
+            {/* Display private Image, PDF details, or default styled mock markup */}
+            {resource.storagePath && type === 'Image' ? (
+              <div className="rd-preview-area rd-preview-image">
+                {signedUrl ? (
+                  <img
+                    src={signedUrl}
+                    alt={title}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '4px' }}
+                  />
+                ) : (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading image...</div>
+                )}
               </div>
-            </div>
+            ) : resource.storagePath && type === 'PDF' ? (
+              <div className="rd-preview-area rd-preview-pdf">
+                <span className="rd-pdf-icon" aria-hidden="true">📄</span>
+                <div className="rd-pdf-info">
+                  <p className="rd-pdf-filename">{resource.fileName || `${title}.pdf`}</p>
+                  <p className="rd-pdf-type">PDF Document</p>
+                  <p className="rd-pdf-size">{resource.fileSize || 'Unknown Size'}</p>
+                </div>
+                <div className="rd-pdf-actions">
+                  <a
+                    href={signedUrl || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`rd-pdf-btn rd-pdf-btn-primary ${!signedUrl ? 'disabled' : ''}`}
+                  >
+                    Open PDF
+                  </a>
+                  <button
+                    onClick={() => {
+                      if (signedUrl) {
+                        const a = document.createElement('a');
+                        a.href = signedUrl;
+                        a.download = resource.fileName || `${title}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                      }
+                    }}
+                    className="rd-pdf-btn rd-pdf-btn-secondary"
+                    disabled={!signedUrl}
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Styled placeholder document */}
+                <div
+                  className="rd-preview-area"
+                  role="img"
+                  aria-label={`Document preview placeholder for ${title}`}
+                >
+                  <div className="rd-preview-doc">
+                    <div className="rd-preview-doc-title">{title.replace(/\.[^.]+$/, '')}</div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--heading">1. Introduction</div>
+                    <div className="rd-preview-doc-line"></div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--text"></div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--text rd-preview-doc-line--short"></div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--text"></div>
+                    <div className="rd-preview-doc-line"></div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--heading">2. Key Concepts</div>
+                    <div className="rd-preview-doc-line"></div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--text rd-preview-doc-line--short"></div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--text"></div>
+                    <div className="rd-preview-doc-line rd-preview-doc-line--text rd-preview-doc-line--medium"></div>
+                    <div className="rd-preview-doc-line"></div>
+                  </div>
+                </div>
 
-            {/* Navigation controls (functional UI) */}
-            <div className="rd-preview-controls" aria-label="Document page navigation">
-              <button
-                className="rd-preview-ctrl-btn"
-                onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
-                disabled={previewPage <= 1}
-                aria-label="Previous page"
-              >
-                ←
-              </button>
-              <span className="rd-preview-page-info" aria-live="polite">
-                {previewPage} / {totalPages}
-              </span>
-              <button
-                className="rd-preview-ctrl-btn"
-                onClick={() => setPreviewPage(p => Math.min(totalPages, p + 1))}
-                disabled={previewPage >= totalPages}
-                aria-label="Next page"
-              >
-                →
-              </button>
-            </div>
+                {/* Navigation controls (functional UI) */}
+                <div className="rd-preview-controls" aria-label="Document page navigation">
+                  <button
+                    className="rd-preview-ctrl-btn"
+                    onClick={() => setPreviewPage(p => Math.max(1, p - 1))}
+                    disabled={previewPage <= 1}
+                    aria-label="Previous page"
+                  >
+                    ←
+                  </button>
+                  <span className="rd-preview-page-info" aria-live="polite">
+                    {previewPage} / {totalPages}
+                  </span>
+                  <button
+                    className="rd-preview-ctrl-btn"
+                    onClick={() => setPreviewPage(p => Math.min(totalPages, p + 1))}
+                    disabled={previewPage >= totalPages}
+                    aria-label="Next page"
+                  >
+                    →
+                  </button>
+                </div>
+              </>
+            )}
           </section>
 
           {/* ── Resource Metadata ── */}
@@ -432,21 +513,29 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
 
             <dl className="rd-source-list">
               <div className="rd-source-row">
-                <dt className="rd-source-label">Title</dt>
+                <dt className="rd-source-label">TITLE</dt>
                 <dd className="rd-source-value">{title}</dd>
               </div>
               <div className="rd-source-row">
-                <dt className="rd-source-label">Category</dt>
+                <dt className="rd-source-label">CATEGORY</dt>
                 <dd className="rd-source-value">{category || '—'}</dd>
               </div>
               <div className="rd-source-row">
-                <dt className="rd-source-label">Type</dt>
+                <dt className="rd-source-label">TYPE</dt>
                 <dd className="rd-source-value">{type || '—'}</dd>
               </div>
-              <div className="rd-source-row">
-                <dt className="rd-source-label">Added</dt>
-                <dd className="rd-source-value">{formatDate(createdAt)}</dd>
-              </div>
+              {(resource.fileName || resource.storagePath) && (
+                <div className="rd-source-row">
+                  <dt className="rd-source-label">FILE</dt>
+                  <dd className="rd-source-value">{resource.fileName || 'Unknown File'}</dd>
+                </div>
+              )}
+              {resource.fileSize && (
+                <div className="rd-source-row">
+                  <dt className="rd-source-label">SIZE</dt>
+                  <dd className="rd-source-value">{resource.fileSize}</dd>
+                </div>
+              )}
               {sourceUrl && (
                 <div className="rd-source-row">
                   <dt className="rd-source-label">Source</dt>

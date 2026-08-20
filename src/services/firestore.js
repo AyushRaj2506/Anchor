@@ -1,5 +1,5 @@
 import { db } from '../config/firebase';
-import { doc, collection, getDocs, addDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { doc, collection, getDocs, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 
 /**
  * Firestore Service helper functions.
@@ -49,16 +49,26 @@ export async function getResources(userId) {
 }
 
 /**
- * Add a new resource for a user.
+ * Add a new resource for a user. Supports custom pre-determined document IDs.
  */
-export async function addResource(userId, resourceData) {
+export async function addResource(userId, resourceData, resourceId = null) {
   const colRef = getResourcesColRef(userId);
-  const docRef = await addDoc(colRef, {
-    ...resourceData,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-  return docRef.id;
+  if (resourceId) {
+    const docRef = doc(db, 'users', userId, 'resources', resourceId);
+    await setDoc(docRef, {
+      ...resourceData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return resourceId;
+  } else {
+    const docRef = await addDoc(colRef, {
+      ...resourceData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+  }
 }
 
 /**

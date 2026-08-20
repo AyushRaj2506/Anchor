@@ -3,6 +3,9 @@ import ResourceStats from '../components/ResourceStats';
 import ResourceFilters from '../components/ResourceFilters';
 import ResourceCard from '../components/ResourceCard';
 import { RESOURCE_TYPES } from '../data/libraryData';
+import { auth, db } from '../config/firebase';
+import { collection, doc } from 'firebase/firestore';
+import { uploadFile, deleteFile } from '../services/storage';
 import './Library.css';
 
 /**
@@ -39,6 +42,12 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
   const [newUrl, setNewUrl]             = useState('');
   const [newTags, setNewTags]           = useState('');
 
+  // Storage states
+  const [selectedFile, setSelectedFile]   = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadState, setUploadState]       = useState('idle'); // idle | preparing | uploading | saving | error
+  const [uploadError, setUploadError]       = useState('');
+
   // ── Compute unique categories from actual resources ──
   const computedCategories = useMemo(() => {
     const catMap = {};
@@ -57,7 +66,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
     return Array.from(types);
   }, [resources]);
 
-  function handleAddSubmit() {
+  async function handleAddSubmit() {
     if (!newTitle.trim()) return;
 
     const typeToUse   = newUrl.trim() ? 'URL' : (newType || 'Document');
@@ -68,31 +77,140 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
       ? newTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
       : [];
 
-    if (onAddResource) {
-      onAddResource({
-        title:     newTitle.trim(),
-        sourceUrl: newUrl.trim() || '',
-        type:      typeToUse,
-        typeIcon:  typeIconMap[typeToUse] || '📋',
-        iconBg:    iconBgMap[typeToUse]   || '#ede3f5',
-        iconColor: '#4a6741',
-        category:  newCategory.trim() || 'Uncategorized',
-        tags,
-        bookmarked: false,
-      });
-    }
+    const isDemoUser = !auth.currentUser || JSON.parse(localStorage.getItem('anchor-user') || '{}').isDemo;
 
-    // Reset modal
-    setShowAddModal(false);
-    setNewTitle('');
-    setNewCategory('');
-    setNewType('Document');
-    setNewUrl('');
-    setNewTags('');
+    if ((typeToUse === 'PDF' || typeToUse === 'Image') && !isDemoUser) {
+      // PDF / Image file upload flow for real user
+      if (!selectedFile) {
+        alert('Please select a file to upload.');
+        return;
+      }
+
+      // Validate size limit (50 MB = 52428800 bytes)
+      if (selectedFile.size > 52428800) {
+        alert('File size exceeds the 50 MB limit.');
+        return;
+      }
+
+      // Validate MIME type
+      const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+      if (!allowedMimes.includes(selectedFile.type)) {
+        alert('Invalid file type. Only PDF, JPEG, PNG, and WebP files are allowed.');
+        return;
+      }
+
+      setUploadState('preparing');
+      setUploadError('');
+      let storagePath = null;
+      let idToken = null;
+
+      try {
+        idToken = await auth.currentUser.getIdToken();
+        
+        // Generate pre-determined Firestore resource ID
+        const newDocRef = doc(collection(db, 'users', auth.currentUser.uid, 'resources'));
+        const resourceId = newDocRef.id;
+
+        setUploadState('uploading');
+        // Upload directly to Supabase via Vercel signed upload URL endpoint
+        storagePath = await uploadFile(selectedFile, resourceId, idToken, (percent) => {
+          setUploadProgress(percent);
+        });
+
+        setUploadState('saving');
+        // Create Firestore document
+        await onAddResource({
+          title: newTitle.trim(),
+          sourceUrl: '',
+          type: typeToUse,
+          typeIcon: typeIconMap[typeToUse] || '📋',
+          iconBg: iconBgMap[typeToUse] || '#ede3f5',
+          iconColor: '#4a6741',
+          category: newCategory.trim() || 'Uncategorized',
+          tags,
+          bookmarked: false,
+          fileName: selectedFile.name,
+          fileType: selectedFile.type,
+          fileSize: `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`,
+          storagePath,
+          storageProvider: 'supabase',
+          uploadedAt: new Date().toISOString()
+        }, resourceId);
+
+        setUploadState('idle');
+        setShowAddModal(false);
+        // Reset inputs
+        setNewTitle('');
+        setNewCategory('');
+        setNewType('Document');
+        setNewUrl('');
+        setNewTags('');
+        setSelectedFile(null);
+
+      } catch (err) {
+        console.error('Error during file upload flow:', err);
+        setUploadState('error');
+        setUploadError(err.message || 'An error occurred during resource creation.');
+
+        // ROLLBACK: Attempt cleanup to prevent orphaned files
+        if (storagePath && idToken) {
+          try {
+            await deleteFile(storagePath, idToken);
+            console.log('Orphaned Supabase file cleaned up successfully:', storagePath);
+          } catch (cleanupErr) {
+            console.error('Rollback cleanup failed for path:', storagePath, cleanupErr);
+            setUploadError(`Failed to save resource. Cleanup failed: ${cleanupErr.message}`);
+          }
+        }
+      }
+
+    } else {
+      // Normal Firestore-only flow (Notes, Documents, URLs, or any resource in Demo Mode)
+      if (onAddResource) {
+        try {
+          // If PDF/Image in Demo mode, construct dummy metadata
+          const isFileDemo = (typeToUse === 'PDF' || typeToUse === 'Image');
+          await onAddResource({
+            title:     newTitle.trim(),
+            sourceUrl: newUrl.trim() || '',
+            type:      typeToUse,
+            typeIcon:  typeIconMap[typeToUse] || '📋',
+            iconBg:    iconBgMap[typeToUse]   || '#ede3f5',
+            iconColor: '#4a6741',
+            category:  newCategory.trim() || 'Uncategorized',
+            tags,
+            bookmarked: false,
+            ...(isFileDemo ? {
+              fileName: selectedFile ? selectedFile.name : `demo-${typeToUse.toLowerCase()}.pdf`,
+              fileType: selectedFile ? selectedFile.type : (typeToUse === 'PDF' ? 'application/pdf' : 'image/png'),
+              fileSize: selectedFile ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB` : '1.2 MB',
+              storagePath: `demo/resources/${typeToUse.toLowerCase()}`,
+              storageProvider: 'supabase',
+              uploadedAt: new Date().toISOString()
+            } : {})
+          });
+
+          // Reset modal
+          setShowAddModal(false);
+          setNewTitle('');
+          setNewCategory('');
+          setNewType('Document');
+          setNewUrl('');
+          setNewTags('');
+          setSelectedFile(null);
+          setUploadState('idle');
+          setUploadError('');
+        } catch (err) {
+          console.error('Demo/Text resource addition failed:', err);
+        }
+      }
+    }
   }
 
   function handleModalKeyDown(e) {
-    if (e.key === 'Escape') setShowAddModal(false);
+    if (e.key === 'Escape' && (uploadState === 'idle' || uploadState === 'error')) {
+      setShowAddModal(false);
+    }
   }
 
   // ── Filtering + sorting ──────────────────────────────────────────
@@ -302,24 +420,20 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
       {showAddModal && (
         <div
           className="lib-modal-overlay"
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget && (uploadState === 'idle' || uploadState === 'error')) setShowAddModal(false); }}
           onKeyDown={handleModalKeyDown}
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-resource-dialog-title"
         >
-          <div
-            className="card"
-            style={{ padding: '2rem', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}
-          >
-            <h3 id="add-resource-dialog-title" style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>
-              Add New Resource
-            </h3>
+          <div className="lib-modal-container">
+            <div className="lib-modal-header">
+              <h3 id="add-resource-dialog-title" className="lib-modal-title">
+                Add New Resource
+              </h3>
+            </div>
+            
+            <div className="lib-modal-body">
 
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-res-title">
@@ -330,6 +444,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                 type="text"
                 placeholder="e.g. DBMS Normalization Notes"
                 value={newTitle}
+                disabled={uploadState !== 'idle' && uploadState !== 'error'}
                 onChange={e => setNewTitle(e.target.value)}
                 style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
                 autoFocus
@@ -347,6 +462,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                   type="text"
                   placeholder="e.g. DBMS"
                   value={newCategory}
+                  disabled={uploadState !== 'idle' && uploadState !== 'error'}
                   onChange={e => setNewCategory(e.target.value)}
                   style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
                 />
@@ -358,6 +474,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                 <select
                   id="add-res-type"
                   value={newType}
+                  disabled={uploadState !== 'idle' && uploadState !== 'error'}
                   onChange={e => setNewType(e.target.value)}
                   style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
                 >
@@ -366,47 +483,117 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
               </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-res-url">
-                URL <span style={{ fontWeight: 'normal' }}>(optional — sets type to URL)</span>
-              </label>
-              <input
-                id="add-res-url"
-                type="url"
-                placeholder="https://..."
-                value={newUrl}
-                onChange={e => setNewUrl(e.target.value)}
-                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-              />
-            </div>
+            {(newType === 'PDF' || newType === 'Image') ? (
+              <div className="upload-area-wrapper">
+                <label className="lib-modal-label" htmlFor="add-res-file">
+                  Choose File * <span>(PDF or Image, max 50MB)</span>
+                </label>
+                <div className="upload-area">
+                  <input
+                    id="add-res-file"
+                    className="upload-area-input"
+                    type="file"
+                    accept={newType === 'PDF' ? 'application/pdf' : 'image/jpeg,image/png,image/webp'}
+                    disabled={uploadState !== 'idle' && uploadState !== 'error'}
+                    onChange={e => {
+                      setSelectedFile(e.target.files[0]);
+                      setUploadError('');
+                    }}
+                    aria-label={`Upload a ${newType === 'PDF' ? 'PDF' : 'image'} file`}
+                  />
+                  <div className="upload-area-content">
+                    <span className="upload-icon">📄</span>
+                    <p className="upload-title">Upload a {newType === 'PDF' ? 'PDF' : 'image'}</p>
+                    <p className="upload-subtitle">PDF, JPG, PNG or WEBP • Max 50 MB</p>
+                  </div>
+                </div>
+                {selectedFile && (
+                  <div className="upload-selected-file">
+                    <span className="upload-file-name">{selectedFile.name}</span>
+                    <span className="upload-file-size">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="lib-modal-input-group">
+                <label className="lib-modal-label" htmlFor="add-res-url">
+                  URL <span>(optional — sets type to URL)</span>
+                </label>
+                <input
+                  id="add-res-url"
+                  className="lib-modal-input"
+                  type="url"
+                  placeholder="https://..."
+                  value={newUrl}
+                  disabled={uploadState !== 'idle' && uploadState !== 'error'}
+                  onChange={e => setNewUrl(e.target.value)}
+                />
+              </div>
+            )}
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-res-tags">
-                Tags <span style={{ fontWeight: 'normal' }}>(comma-separated)</span>
+            <div className="lib-modal-input-group">
+              <label className="lib-modal-label" htmlFor="add-res-tags">
+                Tags <span>(comma-separated)</span>
               </label>
               <input
                 id="add-res-tags"
+                className="lib-modal-input"
                 type="text"
                 placeholder="e.g. dbms, normalization"
                 value={newTags}
+                disabled={uploadState !== 'idle' && uploadState !== 'error'}
                 onChange={e => setNewTags(e.target.value)}
-                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
               />
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+            {uploadState !== 'idle' && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>
+                {uploadState === 'preparing' && <div style={{ color: 'var(--text-secondary)' }}>Preparing upload...</div>}
+                {uploadState === 'uploading' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-primary)' }}>
+                      <span>Uploading...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: 'var(--color-border)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ width: `${uploadProgress}%`, height: '100%', background: 'var(--color-accent)', transition: 'width 0.1s' }} />
+                    </div>
+                  </div>
+                )}
+                {uploadState === 'saving' && <div style={{ color: 'var(--color-accent)', fontWeight: 'bold' }}>Saving resource metadata...</div>}
+                {uploadState === 'error' && <div style={{ color: 'var(--color-danger, #c0392b)', fontWeight: '500' }}>⚠️ {uploadError}</div>}
+              </div>
+            )}
+
+            </div> {/* End of modal body */}
+
+            <div className="lib-modal-footer">
               <button
-                onClick={() => setShowAddModal(false)}
-                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}
+                className="lib-modal-btn-cancel"
+                onClick={() => {
+                  if (uploadState === 'idle' || uploadState === 'error') {
+                    setShowAddModal(false);
+                    setSelectedFile(null);
+                    setUploadState('idle');
+                    setUploadError('');
+                  }
+                }}
+                disabled={uploadState !== 'idle' && uploadState !== 'error'}
               >
                 Cancel
               </button>
               <button
+                className="lib-modal-btn-submit"
                 onClick={handleAddSubmit}
-                disabled={!newTitle.trim()}
-                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: !newTitle.trim() ? 0.5 : 1 }}
+                disabled={
+                  !newTitle.trim() || 
+                  ((newType === 'PDF' || newType === 'Image') && !selectedFile) ||
+                  (uploadState !== 'idle' && uploadState !== 'error')
+                }
               >
-                Add Resource
+                {uploadState === 'uploading' || uploadState === 'saving' || uploadState === 'preparing'
+                  ? 'Uploading...' 
+                  : 'Add Resource'}
               </button>
             </div>
           </div>

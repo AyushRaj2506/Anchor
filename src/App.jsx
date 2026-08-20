@@ -17,6 +17,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './config/firebase';
 import { getResources, addResource, updateResource, deleteResource, getTasks, addTask, updateTask, deleteTask } from './services/firestore';
 import { serverTimestamp } from 'firebase/firestore';
+import { deleteFile } from './services/storage';
 import './App.css';
 
 /**
@@ -234,19 +235,22 @@ function App() {
     }
   }
 
-  async function handleAddResource(newResource) {
+  async function handleAddResource(newResource, resourceId = null) {
     if (user && !user.isDemo) {
       try {
-        const id = await addResource(user.uid, newResource);
+        const id = await addResource(user.uid, newResource, resourceId);
         setResources(prev => [{ id, ...newResource, createdAt: new Date() }, ...prev]);
+        return id;
       } catch (err) {
         console.error('Failed to add resource:', err);
         alert('Failed to add resource. Please try again.');
+        throw err;
       }
     } else {
       // Demo mode — local only
-      const id = Date.now().toString();
+      const id = resourceId || Date.now().toString();
       setResources(prev => [{ id, ...newResource, createdAt: new Date() }, ...prev]);
+      return id;
     }
   }
 
@@ -274,8 +278,24 @@ function App() {
   }
 
   async function handleDeleteResource(resourceId) {
+    const targetResource = resources.find(r => r.id === resourceId);
+
     if (user && !user.isDemo) {
       try {
+        // If the resource has a Supabase file, delete it first
+        if (targetResource && targetResource.storagePath) {
+          try {
+            const idToken = await auth.currentUser.getIdToken();
+            await deleteFile(targetResource.storagePath, idToken);
+            console.log('Successfully deleted associated Supabase storage file:', targetResource.storagePath);
+          } catch (storageErr) {
+            console.error('Failed to delete Supabase file:', storageErr);
+            alert(`Failed to delete the associated storage file. Deletion halted to prevent orphaned data. Details: ${storageErr.message}`);
+            return; // HALT deletion if Supabase delete fails
+          }
+        }
+
+        // Delete from Firestore
         await deleteResource(user.uid, resourceId);
         setResources(prev => prev.filter(r => r.id !== resourceId));
         // If currently viewing this resource, go back to Library
@@ -283,10 +303,11 @@ function App() {
           handleNavigate('library');
         }
       } catch (err) {
-        console.error('Failed to delete resource:', err);
-        alert('Failed to delete resource. Please try again.');
+        console.error('Failed to delete resource from database:', err);
+        alert('Failed to delete resource from database. Please try again.');
       }
     } else {
+      // Demo mode or mock only
       setResources(prev => prev.filter(r => r.id !== resourceId));
       if (selectedResource?.id === resourceId) {
         handleNavigate('library');

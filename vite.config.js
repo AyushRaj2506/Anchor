@@ -17,17 +17,19 @@ const localApiPlugin = () => ({
   name: 'local-api',
   configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
-      if ((req.url === '/api/ai/analyze' || req.url === '/api/ai/ask') && req.method === 'POST') {
+      if (req.url.startsWith('/api/') && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => { body += chunk; });
         req.on('end', async () => {
           try {
-            const parsedBody = JSON.parse(body);
-            const mockReq = { method: 'POST', body: parsedBody };
+            const parsedBody = body ? JSON.parse(body) : {};
+            const mockReq = { method: 'POST', body: parsedBody, headers: req.headers };
             
-            // Resolve absolute path to the local API file to avoid Vite temp resolution issues
-            const relativePath = req.url === '/api/ai/analyze' ? 'api/ai/analyze.js' : 'api/ai/ask.js';
+            // Map the request URL path directly to local serverless handler file
+            // e.g. /api/storage/create-upload-url -> api/storage/create-upload-url.js
+            const relativePath = req.url.split('?')[0].replace(/^\//, '') + '.js';
             const absolutePath = path.resolve(process.cwd(), relativePath);
+            
             // Append cache buster to prevent ESM import caching in Node during development
             const handlerModule = await import(pathToFileURL(absolutePath).href + '?t=' + Date.now());
             const handler = handlerModule.default;
