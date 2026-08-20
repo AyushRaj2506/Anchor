@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Moon, Sun, Menu } from 'lucide-react';
+import { getDisplayName } from '../utils/user';
 import './Header.css';
 
 /**
@@ -26,7 +27,7 @@ function Header({ onMenuToggle, activePage, theme, onToggleTheme, user }) {
   const title = PAGE_TITLES[activePage] || 'Anchor';
 
   // Derive avatar initial from user name
-  const displayName = user?.name || '';
+  const displayName = getDisplayName(user);
   const initial = displayName ? displayName.charAt(0).toUpperCase() : 'U';
 
   return (

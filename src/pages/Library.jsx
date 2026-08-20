@@ -6,6 +6,7 @@ import { RESOURCE_TYPES } from '../data/libraryData';
 import { auth, db } from '../config/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { uploadFile, deleteFile } from '../services/storage';
+import { analyzeResourceFile } from '../services/ai';
 import './Library.css';
 
 /**
@@ -27,7 +28,7 @@ import './Library.css';
 
 const ITEMS_PER_PAGE = 6; // show 6 at a time; "Load more" adds 6 more
 
-function Library({ resources, loading, error, onOpenResource, onToggleBookmark, onAddResource, onDeleteResource }) {
+function Library({ resources, loading, error, onOpenResource, onToggleBookmark, onAddResource, onDeleteResource, onUpdateResource, onCreateTasksFromAnalysis }) {
   const [search, setSearch]       = useState('');
   const [category, setCategory]   = useState('all');
   const [type, setType]           = useState('all');
@@ -41,12 +42,16 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
   const [newType, setNewType]           = useState('Document');
   const [newUrl, setNewUrl]             = useState('');
   const [newTags, setNewTags]           = useState('');
+  const [newContent, setNewContent]     = useState('');
+  const [newEmailSender, setNewEmailSender] = useState('');
+  const [newEmailSubject, setNewEmailSubject] = useState('');
 
   // Storage states
-  const [selectedFile, setSelectedFile]   = useState(null);
+  const [selectedFile, setSelectedFile]     = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadState, setUploadState]       = useState('idle'); // idle | preparing | uploading | saving | error
+  const [uploadState, setUploadState]       = useState('idle'); // idle | preparing | uploading | saving | analyzing | error
   const [uploadError, setUploadError]       = useState('');
+  const [aiNotification, setAiNotification] = useState('');  // post-upload AI status message
 
   // ── Compute unique categories from actual resources ──
   const computedCategories = useMemo(() => {
@@ -69,9 +74,14 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
   async function handleAddSubmit() {
     if (!newTitle.trim()) return;
 
-    const typeToUse   = newUrl.trim() ? 'URL' : (newType || 'Document');
-    const typeIconMap = { URL: '🔗', PDF: '📄', Note: '📝', Image: '🖼', Document: '📋' };
-    const iconBgMap   = { URL: '#fef4e0', PDF: '#fde8e0', Note: '#e3f0e3', Image: '#e0ebf5', Document: '#ede3f5' };
+    let typeToUse = newType || 'Document';
+    if (newType !== 'URL' && newType !== 'Google Drive' && newUrl.trim()) {
+      // Compatibility if user was typing in old url field
+      typeToUse = 'URL';
+    }
+
+    const typeIconMap = { URL: '🔗', PDF: '📄', Note: '📝', Image: '🖼', Document: '📋', 'Google Drive': '📂', Email: '✉️' };
+    const iconBgMap   = { URL: '#fef4e0', PDF: '#fde8e0', Note: '#e3f0e3', Image: '#e0ebf5', Document: '#ede3f5', 'Google Drive': '#e0f7fa', Email: '#fce4ec' };
 
     const tags = newTags.trim()
       ? newTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
@@ -145,7 +155,69 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
         setNewType('Document');
         setNewUrl('');
         setNewTags('');
+        setNewContent('');
+        setNewEmailSender('');
+        setNewEmailSubject('');
         setSelectedFile(null);
+
+        // ── Auto-trigger AI analysis (non-blocking) ──────────────────────────
+        // Runs AFTER modal closes so upload/save never fails because of AI.
+        const capturedResourceId = resourceId;
+        const capturedStoragePath = storagePath;
+        const capturedFileType = selectedFile.type;
+        const capturedFileName = selectedFile.name;
+        const capturedCategory = newCategory.trim() || 'Uncategorized';
+
+        setAiNotification('✨ Analyzing your resource with AI...');
+
+        ;(async () => {
+          try {
+            const freshToken = await auth.currentUser.getIdToken(true);
+            const result = await analyzeResourceFile(
+              {
+                resourceId:  capturedResourceId,
+                storagePath: capturedStoragePath,
+                fileType:    capturedFileType,
+                fileName:    capturedFileName,
+              },
+              freshToken
+            );
+
+            if (onUpdateResource) {
+              await onUpdateResource(capturedResourceId, {
+                aiSummary:              result.summary,
+                aiCategory:             result.category,
+                aiTags:                 result.tags,
+                aiImportantInformation: result.importantInformation,
+                aiDeadline:             result.deadline ?? null,
+                aiActionItems:          result.actionItems,
+                contentText:            result.contentText ?? null,
+                contentTruncated:       result.contentTruncated ?? false,
+                deadlines:              result.deadlines ?? [],
+              });
+            }
+
+            let createdCount = 0;
+            if (onCreateTasksFromAnalysis && result.actionItems?.length > 0) {
+              createdCount = await onCreateTasksFromAnalysis(
+                capturedResourceId,
+                result.actionItems,
+                result.category || capturedCategory
+              );
+            }
+
+            if (createdCount > 0) {
+              setAiNotification(`✅ AI analysis complete. ${createdCount} task${createdCount !== 1 ? 's' : ''} created from action items.`);
+            } else {
+              setAiNotification('✅ AI analysis complete.');
+            }
+          } catch (aiErr) {
+            console.error('Auto AI analysis failed after upload:', aiErr);
+            setAiNotification('⚠️ Resource uploaded. AI analysis could not be completed. You can retry from Resource Details.');
+          } finally {
+            setTimeout(() => setAiNotification(''), 7000);
+          }
+        })();
 
       } catch (err) {
         console.error('Error during file upload flow:', err);
@@ -173,6 +245,9 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
           await onAddResource({
             title:     newTitle.trim(),
             sourceUrl: newUrl.trim() || '',
+            content:   newContent.trim() || '',
+            emailSender: newEmailSender.trim() || '',
+            emailSubject: newEmailSubject.trim() || '',
             type:      typeToUse,
             typeIcon:  typeIconMap[typeToUse] || '📋',
             iconBg:    iconBgMap[typeToUse]   || '#ede3f5',
@@ -197,6 +272,9 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
           setNewType('Document');
           setNewUrl('');
           setNewTags('');
+          setNewContent('');
+          setNewEmailSender('');
+          setNewEmailSubject('');
           setSelectedFile(null);
           setUploadState('idle');
           setUploadError('');
@@ -220,10 +298,15 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
     let results = (resources || []).filter((r) => {
       // Search: matches title, category, or any tag
       if (q) {
-        const inTitle    = r.title.toLowerCase().includes(q);
+        const inTitle    = (r.title || '').toLowerCase().includes(q);
         const inCategory = (r.category || '').toLowerCase().includes(q);
         const inTags     = (r.tags || []).some((t) => t.toLowerCase().includes(q));
-        if (!inTitle && !inCategory && !inTags) return false;
+        const inContent  = (r.content || '').toLowerCase().includes(q);
+        const inEmailSender = (r.emailSender || '').toLowerCase().includes(q);
+        const inEmailSubject = (r.emailSubject || '').toLowerCase().includes(q);
+        const inUrl      = (r.sourceUrl || '').toLowerCase().includes(q);
+        
+        if (!inTitle && !inCategory && !inTags && !inContent && !inEmailSender && !inEmailSubject && !inUrl) return false;
       }
 
       // Category filter
@@ -271,6 +354,36 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
           + Add Resource
         </button>
       </section>
+
+      {/* ── AI Analysis notification banner ── */}
+      {aiNotification && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            padding: '10px 16px',
+            borderRadius: '8px',
+            background: aiNotification.startsWith('⚠️')
+              ? 'var(--color-danger-bg, #fde8e0)'
+              : 'var(--color-green-soft, #e8f0e8)',
+            color: 'var(--color-text-primary)',
+            borderLeft: `3px solid ${aiNotification.startsWith('⚠️') ? 'var(--color-danger, #c0392b)' : 'var(--color-accent)'}`,
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <span>{aiNotification}</span>
+          <button
+            onClick={() => setAiNotification('')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--color-text-muted)', lineHeight: 1 }}
+            aria-label="Dismiss"
+          >×</button>
+        </div>
+      )}
 
       {/* ── Error banner ── */}
       {error && (
@@ -514,10 +627,26 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                   </div>
                 )}
               </div>
-            ) : (
+            ) : (newType === 'Note' || newType === 'Document') ? (
+              <div className="lib-modal-input-group">
+                <label className="lib-modal-label" htmlFor="add-res-content">
+                  Content *
+                </label>
+                <textarea
+                  id="add-res-content"
+                  className="lib-modal-input"
+                  placeholder={`Type your ${newType.toLowerCase()} content here...`}
+                  value={newContent}
+                  disabled={uploadState !== 'idle' && uploadState !== 'error'}
+                  onChange={e => setNewContent(e.target.value)}
+                  style={{ minHeight: '120px', resize: 'vertical' }}
+                  required
+                />
+              </div>
+            ) : (newType === 'URL' || newType === 'Google Drive') ? (
               <div className="lib-modal-input-group">
                 <label className="lib-modal-label" htmlFor="add-res-url">
-                  URL <span>(optional — sets type to URL)</span>
+                  {newType === 'Google Drive' ? 'Google Drive URL' : 'URL'} *
                 </label>
                 <input
                   id="add-res-url"
@@ -527,9 +656,60 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                   value={newUrl}
                   disabled={uploadState !== 'idle' && uploadState !== 'error'}
                   onChange={e => setNewUrl(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddSubmit(); }}
+                  required
                 />
               </div>
-            )}
+            ) : (newType === 'Email') ? (
+              <>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="lib-modal-label" htmlFor="add-res-email-sender">
+                      Sender *
+                    </label>
+                    <input
+                      id="add-res-email-sender"
+                      className="lib-modal-input"
+                      type="email"
+                      placeholder="professor@university.edu"
+                      value={newEmailSender}
+                      disabled={uploadState !== 'idle' && uploadState !== 'error'}
+                      onChange={e => setNewEmailSender(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="lib-modal-label" htmlFor="add-res-email-subject">
+                      Subject
+                    </label>
+                    <input
+                      id="add-res-email-subject"
+                      className="lib-modal-input"
+                      type="text"
+                      placeholder="Email Subject"
+                      value={newEmailSubject}
+                      disabled={uploadState !== 'idle' && uploadState !== 'error'}
+                      onChange={e => setNewEmailSubject(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="lib-modal-input-group">
+                  <label className="lib-modal-label" htmlFor="add-res-content">
+                    Email Body *
+                  </label>
+                  <textarea
+                    id="add-res-content"
+                    className="lib-modal-input"
+                    placeholder="Paste the email content here..."
+                    value={newContent}
+                    disabled={uploadState !== 'idle' && uploadState !== 'error'}
+                    onChange={e => setNewContent(e.target.value)}
+                    style={{ minHeight: '120px', resize: 'vertical' }}
+                    required
+                  />
+                </div>
+              </>
+            ) : null}
 
             <div className="lib-modal-input-group">
               <label className="lib-modal-label" htmlFor="add-res-tags">

@@ -7,7 +7,9 @@ import {
   Bookmark,
   LogOut,
   Anchor,
+  PanelLeft,
 } from 'lucide-react';
+import { getDisplayName } from '../utils/user';
 import './Sidebar.css';
 
 // Each nav item: lucide icon component, label, id
@@ -19,9 +21,9 @@ const NAV_ITEMS = [
   { id: 'bookmarks', label: 'Bookmarks',        Icon: Bookmark        },
 ];
 
-function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
+function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout, collapsed, onToggleCollapse }) {
   const isDemo      = user?.isDemo;
-  const displayName = user?.name || 'User';
+  const displayName = getDisplayName(user);
   const displayRole = isDemo ? 'Demo Mode' : 'Student';
   const initial     = displayName.charAt(0).toUpperCase();
 
@@ -37,7 +39,7 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
       )}
 
       <aside
-        className={`sidebar ${isOpen ? 'sidebar--open' : ''}`}
+        className={`sidebar ${isOpen ? 'sidebar--open' : ''} ${collapsed ? 'sidebar--collapsed' : ''}`}
         aria-label="Main navigation"
       >
         {/* ── Brand ── */}
@@ -49,6 +51,14 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
             <span className="sidebar-brand-name">Anchor</span>
             <span className="sidebar-brand-tagline">College Second Brain</span>
           </div>
+          <button 
+             className="sidebar-toggle-btn"
+             onClick={onToggleCollapse}
+             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+             <PanelLeft size={18} strokeWidth={2} aria-hidden="true" />
+          </button>
         </div>
 
         {/* ── Navigation ── */}
@@ -60,6 +70,7 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
                   className={`sidebar-nav-item ${activePage === id || (activePage === 'resource-details' && id === 'library') ? 'sidebar-nav-item--active' : ''}`}
                   onClick={() => { onNavigate(id); onClose(); }}
                   aria-current={activePage === id ? 'page' : undefined}
+                  title={collapsed ? label : undefined}
                 >
                   <span className="sidebar-nav-icon" aria-hidden="true">
                     <Icon size={16} strokeWidth={activePage === id ? 2.5 : 2} />
@@ -84,6 +95,7 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout }) {
           <button
             className="sidebar-footer-item"
             aria-label="Log out of Anchor"
+            title={collapsed ? "Logout" : undefined}
             onClick={onLogout}
           >
             <LogOut size={15} strokeWidth={2} aria-hidden="true" />

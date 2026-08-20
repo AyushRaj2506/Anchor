@@ -51,12 +51,15 @@ Title: ${r.title}
 Category: ${r.category || 'Uncategorized'}
 Type: ${r.type || 'Document'}
 Tags: ${(r.tags || []).join(', ') || 'None'}
-Description/Content: ${r.description || r.notes || 'No content provided.'}
 AI Summary: ${r.aiSummary || 'None'}
 AI Important Facts: ${(r.aiImportantInformation || []).join('; ') || 'None'}
 AI Deadline: ${r.aiDeadline || 'None'}
-AI Action Items: ${(r.aiActionItems || []).join('; ') || 'None'}
+AI Action Items: ${Array.isArray(r.aiActionItems) ? (r.aiActionItems.map ? r.aiActionItems.map(a => typeof a === 'string' ? a : a.title || '').filter(Boolean).join('; ') : r.aiActionItems) : 'None'}
+Extracted Document Content: ${r.contentText ? r.contentText.substring(0, 6000) : (r.content || r.description || r.notes || 'No content available.')}
+${r.emailSender ? `Email Sender: ${r.emailSender}` : ''}
+${r.emailSubject ? `Email Subject: ${r.emailSubject}` : ''}
 `).join('\n');
+
 
     const formattedTasks = context.tasks.map((t, idx) => `
 [Task #${idx + 1}]

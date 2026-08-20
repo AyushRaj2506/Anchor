@@ -14,7 +14,45 @@
   top: 0;
   flex-shrink: 0;
   z-index: 100;
-  transition: transform 250ms ease;
+  transition: transform 250ms ease, width 250ms ease, min-width 250ms ease;
+}
+
+/* ── Collapsed State ── */
+.sidebar--collapsed {
+  width: 76px;
+  min-width: 76px;
+}
+
+.sidebar--collapsed .sidebar-brand {
+  flex-direction: column;
+  padding: 16px 10px;
+  gap: 16px;
+}
+
+.sidebar--collapsed .sidebar-brand-text,
+.sidebar--collapsed .sidebar-nav-label,
+.sidebar--collapsed .sidebar-user-info,
+.sidebar--collapsed .sidebar-footer-item span {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar-nav-item,
+.sidebar--collapsed .sidebar-user,
+.sidebar--collapsed .sidebar-footer-item {
+  justify-content: center;
+  padding: 12px;
+}
+
+.sidebar--collapsed .sidebar-nav-icon {
+  margin: 0;
+}
+
+.sidebar--collapsed .sidebar-user {
+  padding: 10px;
+}
+
+.sidebar--collapsed .sidebar-toggle-btn {
+  margin-left: 0;
 }
 
 /* ── Brand ── */
@@ -57,6 +95,25 @@
   color: var(--color-sidebar-text);
   opacity: 0.7;
   line-height: 1.2;
+}
+
+/* ── Toggle Button ── */
+.sidebar-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-sidebar-text);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 150ms ease, color 150ms ease;
+  margin-left: auto;
+}
+.sidebar-toggle-btn:hover {
+  background: var(--color-sidebar-hover);
+  color: var(--color-sidebar-text-active);
 }
 
 /* ── Nav ── */
@@ -252,5 +309,34 @@
     background: rgba(0, 0, 0, 0.5);
     z-index: 199;
     animation: anchor-fade-in 180ms ease both;
+  }
+
+  /* Disable collapsed state on mobile */
+  .sidebar--collapsed {
+    width: 248px;
+    min-width: 248px;
+  }
+  .sidebar-toggle-btn {
+    display: none;
+  }
+  .sidebar--collapsed .sidebar-brand {
+    flex-direction: row;
+    padding: 22px 20px 18px;
+    gap: 11px;
+  }
+  .sidebar--collapsed .sidebar-brand-text,
+  .sidebar--collapsed .sidebar-nav-label,
+  .sidebar--collapsed .sidebar-user-info,
+  .sidebar--collapsed .sidebar-footer-item span {
+    display: flex;
+  }
+  .sidebar--collapsed .sidebar-nav-item,
+  .sidebar--collapsed .sidebar-footer-item {
+    justify-content: flex-start;
+    padding: 9px 12px;
+  }
+  .sidebar--collapsed .sidebar-user {
+    justify-content: flex-start;
+    padding: 10px 10px 12px;
   }
 }

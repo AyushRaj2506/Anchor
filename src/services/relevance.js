@@ -33,29 +33,45 @@ export function searchKnowledge(queryText, resources = [], tasks = []) {
     let score = 0;
     
     // Original metadata
-    const titleText = (res.title || '').toLowerCase();
-    const descText = (res.description || res.notes || '').toLowerCase();
-    const catText = (res.category || '').toLowerCase();
-    const tagsText = (res.tags || []).join(' ').toLowerCase();
+    const titleText    = (res.title || '').toLowerCase();
+    const descText     = (res.description || res.notes || '').toLowerCase();
+    const catText      = (res.category || '').toLowerCase();
+    const tagsText     = (res.tags || []).join(' ').toLowerCase();
     
     // AI analysis metadata
-    const aiSumText = (res.aiSummary || '').toLowerCase();
+    const aiSumText       = (res.aiSummary || '').toLowerCase();
     const aiImportantText = (res.aiImportantInformation || []).join(' ').toLowerCase();
-    const aiCatText = (res.aiCategory || '').toLowerCase();
-    const aiTagsText = (res.aiTags || []).join(' ').toLowerCase();
+    const aiCatText       = (res.aiCategory || '').toLowerCase();
+    const aiTagsText      = (res.aiTags || []).join(' ').toLowerCase();
+
+    // Extracted document content (limit scoring scan for performance)
+    const contentText = (res.contentText || '').toLowerCase().substring(0, 8000);
+
+    // Structured action items and deadlines (handle both string[] and object[] formats)
+    const actionItemsText = (res.aiActionItems || [])
+      .map(a => typeof a === 'string' ? a : (a.title || '') + ' ' + (a.description || ''))
+      .join(' ').toLowerCase();
+    const deadlinesText = (res.deadlines || [])
+      .map(d => (d.title || '') + ' ' + (d.description || '') + ' ' + (d.sourceText || ''))
+      .join(' ').toLowerCase();
 
     tokensToUse.forEach(token => {
-      // Matches on original fields
-      if (titleText.includes(token)) score += 10;
-      if (descText.includes(token)) score += 3;
-      if (catText.includes(token)) score += 5;
-      if (tagsText.includes(token)) score += 4;
+      // Original fields
+      if (titleText.includes(token))    score += 10;
+      if (descText.includes(token))     score += 3;
+      if (catText.includes(token))      score += 5;
+      if (tagsText.includes(token))     score += 4;
       
-      // Matches on AI enriched fields
-      if (aiSumText.includes(token)) score += 3;
-      if (aiImportantText.includes(token)) score += 3;
-      if (aiCatText.includes(token)) score += 5;
-      if (aiTagsText.includes(token)) score += 4;
+      // AI enriched fields
+      if (aiSumText.includes(token))       score += 4;
+      if (aiImportantText.includes(token)) score += 4;
+      if (aiCatText.includes(token))       score += 5;
+      if (aiTagsText.includes(token))      score += 4;
+
+      // Extracted content and actions
+      if (contentText.includes(token))     score += 2;
+      if (actionItemsText.includes(token)) score += 6;
+      if (deadlinesText.includes(token))   score += 5;
     });
 
     return { resource: res, score };
@@ -63,6 +79,7 @@ export function searchKnowledge(queryText, resources = [], tasks = []) {
   .filter(item => item.score > 0)
   .sort((a, b) => b.score - a.score)
   .map(item => item.resource);
+
 
   // Score tasks
   const scoredTasks = tasks.map(task => {

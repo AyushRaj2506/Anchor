@@ -132,7 +132,7 @@ export const LIBRARY_RESOURCES = [
 
 // All unique resource types — used as a static type list for Add Resource modal and Type filter
 // (UI configuration — not mock data records)
-export const RESOURCE_TYPES = ['PDF', 'Note', 'Image', 'URL', 'Document'];
+export const RESOURCE_TYPES = ['PDF', 'Note', 'Image', 'URL', 'Google Drive', 'Email', 'Document'];
 
 /**
  * Per-resource mock detail data.

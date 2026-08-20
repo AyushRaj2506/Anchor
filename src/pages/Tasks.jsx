@@ -264,98 +264,104 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
       {/* ── Add Task Modal ── */}
       {showAddModal && (
         <div
-          className="lib-modal-overlay"
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          }}
+          className="task-modal-overlay"
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-task-dialog-title"
         >
-          <div
-            className="card"
-            style={{ padding: '2rem', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '1rem' }}
-          >
-            <h3 id="add-task-dialog-title" style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-primary)' }}>
-              Add New Task
-            </h3>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-title">
-                Title *
-              </label>
-              <input
-                id="add-task-title"
-                type="text"
-                placeholder="Task Title"
-                value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-                autoFocus
-                onKeyDown={e => { if (e.key === 'Enter') handleAddSubmit(); if (e.key === 'Escape') setShowAddModal(false); }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-category">
-                  Category
-                </label>
-                <select
-                  id="add-task-category"
-                  value={newCategory}
-                  onChange={e => setNewCategory(e.target.value)}
-                  style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-                >
-                  {TASK_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
+          <div className="task-modal-card">
+            
+            {/* Modal Header */}
+            <div className="task-modal-header">
+              <div>
+                <h3 id="add-task-dialog-title">Add New Task</h3>
+                <p>Create a task and keep track of your progress.</p>
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-priority">
-                  Priority
-                </label>
-                <select
-                  id="add-task-priority"
-                  value={newPriority}
-                  onChange={e => setNewPriority(e.target.value)}
-                  style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-                >
-                  {TASK_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }} htmlFor="add-task-deadline">
-                Deadline <span style={{ fontWeight: 'normal' }}>(optional)</span>
-              </label>
-              <input
-                id="add-task-deadline"
-                type="datetime-local"
-                value={newDeadline}
-                onChange={e => setNewDeadline(e.target.value)}
-                style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.25rem' }}>
-              <button
+              <button 
+                className="task-modal-close" 
                 onClick={() => setShowAddModal(false)}
-                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}
+                aria-label="Close modal"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="task-modal-body">
+              
+              <div className="task-modal-group">
+                <label className="task-modal-label" htmlFor="add-task-title">Title *</label>
+                <input
+                  id="add-task-title"
+                  type="text"
+                  className="task-modal-input"
+                  placeholder="Task title..."
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddSubmit(); if (e.key === 'Escape') setShowAddModal(false); }}
+                />
+              </div>
+
+              <div className="task-modal-row">
+                <div className="task-modal-group">
+                  <label className="task-modal-label" htmlFor="add-task-category">Category</label>
+                  <select
+                    id="add-task-category"
+                    className="task-modal-select"
+                    value={newCategory}
+                    onChange={e => setNewCategory(e.target.value)}
+                  >
+                    {TASK_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+                
+                <div className="task-modal-group">
+                  <label className="task-modal-label" htmlFor="add-task-priority">Priority</label>
+                  <select
+                    id="add-task-priority"
+                    className="task-modal-select"
+                    value={newPriority}
+                    onChange={e => setNewPriority(e.target.value)}
+                  >
+                    {TASK_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="task-modal-group">
+                <label className="task-modal-label" htmlFor="add-task-deadline">
+                  Deadline <span className="task-modal-label-hint">(optional)</span>
+                </label>
+                <input
+                  id="add-task-deadline"
+                  type="datetime-local"
+                  className="task-modal-input"
+                  value={newDeadline}
+                  onChange={e => setNewDeadline(e.target.value)}
+                />
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="task-modal-footer">
+              <button
+                className="task-btn-cancel"
+                onClick={() => setShowAddModal(false)}
               >
                 Cancel
               </button>
               <button
+                className="task-btn-submit"
                 onClick={handleAddSubmit}
                 disabled={!newTitle.trim()}
-                style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', opacity: !newTitle.trim() ? 0.5 : 1 }}
               >
                 Add Task
               </button>
             </div>
+            
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import ResourceList from '../components/ResourceList';
 import DeadlineList from '../components/DeadlineList';
 import TaskOverview from '../components/TaskOverview';
 import KnowledgeCard from '../components/KnowledgeCard';
+import { getDisplayName } from '../utils/user';
 import './Dashboard.css';
 
 /**
@@ -41,7 +42,7 @@ function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookm
   const nextDeadlineTask = activeDeadlines.length > 0 ? activeDeadlines[0].title : 'None';
 
   // Derive display name from user object
-  const displayName = user?.name || 'there';
+  const displayName = getDisplayName(user);
 
   return (
     <main className="dashboard" id="main-content" tabIndex={-1}>
@@ -126,7 +127,7 @@ function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookm
           <TaskOverview tasks={tasks} />
         </div>
         <div className="dashboard-bottom-right">
-          <KnowledgeCard />
+          <KnowledgeCard resources={resources} tasks={tasks} />
         </div>
       </section>
 

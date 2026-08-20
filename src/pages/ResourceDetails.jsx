@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ResourceDetails.css';
-import { analyzeResource } from '../services/ai';
+import { analyzeResource, analyzeResourceFile } from '../services/ai';
 import { auth } from '../config/firebase';
 import { getDownloadUrl } from '../services/storage';
 
@@ -21,7 +21,7 @@ import { getDownloadUrl } from '../services/storage';
  *   - Action items are local UI state only (future milestone for persistence)
  *   - Document preview is a styled CSS placeholder — no PDF library in scope
  */
-function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource, onUpdateResource, onNavigate }) {
+function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource, onUpdateResource, onCreateTasksFromAnalysis, onNavigate }) {
   const {
     id,
     title,
@@ -50,6 +50,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
   // AI analysis state
   const [analyzing, setAnalyzing] = useState(false);
   const [aiError, setAiError] = useState(null);
+  const [taskNotification, setTaskNotification] = useState(null); // e.g. "AI found 2 action items and created 2 tasks."
 
   // Signed URL state
   const [signedUrl, setSignedUrl] = useState(null);
@@ -78,31 +79,85 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
   async function handleAnalyze() {
     setAnalyzing(true);
     setAiError(null);
+    setTaskNotification(null);
+
+    const isDemo = JSON.parse(localStorage.getItem('anchor-user') || '{}').isDemo;
+    const hasRealFile = resource.storagePath && !isDemo && auth.currentUser;
 
     try {
-      const result = await analyzeResource(resource);
-      
+      let result;
+
+      if (hasRealFile && (resource.fileType === 'application/pdf' ||
+                          resource.fileType === 'image/jpeg' ||
+                          resource.fileType === 'image/png' ||
+                          resource.fileType === 'image/webp')) {
+        // Real file: send actual bytes to Gemini via authenticated backend
+        const idToken = await auth.currentUser.getIdToken();
+        result = await analyzeResourceFile(
+          {
+            resourceId: id,
+            storagePath: resource.storagePath,
+            fileType: resource.fileType,
+            fileName: resource.fileName,
+          },
+          idToken
+        );
+      } else {
+        // Demo mode or non-file resource: fall back to metadata-based analysis
+        result = await analyzeResource(resource);
+      }
+
+      // Persist AI results to Firestore
       try {
         if (onUpdateResource) {
           await onUpdateResource(id, {
-            aiSummary: result.summary,
-            aiCategory: result.category,
-            aiTags: result.tags,
+            aiSummary:             result.summary,
+            aiCategory:            result.category,
+            aiTags:                result.tags,
             aiImportantInformation: result.importantInformation,
-            aiDeadline: result.deadline,
-            aiActionItems: result.actionItems
+            aiDeadline:            result.deadline ?? null,
+            aiActionItems:         result.actionItems,
+            // New fields from real file analysis
+            contentText:           result.contentText ?? null,
+            contentTruncated:      result.contentTruncated ?? false,
+            deadlines:             result.deadlines ?? [],
           });
         }
       } catch (firestoreError) {
         console.error('Firestore save failed:', firestoreError);
         throw new Error('FIRESTORE_SAVE_FAILED');
       }
+
+      // Auto-create tasks from action items
+      if (onCreateTasksFromAnalysis && result.actionItems && result.actionItems.length > 0) {
+        try {
+          const createdCount = await onCreateTasksFromAnalysis(
+            id,
+            result.actionItems,
+            result.category || category
+          );
+          if (createdCount > 0) {
+            setTaskNotification(`✅ AI found ${result.actionItems.length} action item${result.actionItems.length !== 1 ? 's' : ''} and created ${createdCount} task${createdCount !== 1 ? 's' : ''}.`);
+          } else {
+            setTaskNotification('✅ AI analysis complete. Action items were already in your tasks.');
+          }
+        } catch (taskErr) {
+          console.error('Task creation from analysis failed:', taskErr);
+          setTaskNotification('✅ AI analysis complete. Tasks could not be created automatically.');
+        }
+      } else {
+        setTaskNotification('✅ AI analysis complete. No action items found.');
+      }
+
+      // Auto-dismiss notification after 6 seconds
+      setTimeout(() => setTaskNotification(null), 6000);
+
     } catch (err) {
       console.error('AI Analysis failed:', err);
       if (err.message === 'FIRESTORE_SAVE_FAILED') {
-        setAiError("AI analysis completed, but it could not be saved. Please try again.");
+        setAiError('AI analysis completed, but it could not be saved. Please try again.');
       } else {
-        setAiError("AI analysis is temporarily unavailable. Your resource was not affected.");
+        setAiError('AI analysis is temporarily unavailable. Your resource was not affected.');
       }
     } finally {
       setAnalyzing(false);
@@ -195,6 +250,64 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
           </button>
         </div>
       </div>
+
+      {/* ── Task notification banner ── */}
+      {taskNotification && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            padding: '12px 20px',
+            background: 'var(--color-green-soft, #e8f0e8)',
+            color: 'var(--color-text-primary)',
+            borderLeft: '3px solid var(--color-accent)',
+            borderRadius: '6px',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <span>{taskNotification}</span>
+          <button
+            onClick={() => setTaskNotification(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--color-text-muted)', lineHeight: 1 }}
+            aria-label="Dismiss notification"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* ── AI Error banner ── */}
+      {aiError && (
+        <div
+          role="alert"
+          style={{
+            padding: '12px 20px',
+            background: 'var(--color-danger-bg, #fde8e0)',
+            color: 'var(--color-danger, #c0392b)',
+            borderLeft: '3px solid var(--color-danger, #c0392b)',
+            borderRadius: '6px',
+            fontSize: '0.875rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <span>⚠️ {aiError}</span>
+          <button
+            onClick={() => setAiError(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'inherit', lineHeight: 1 }}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* ── Two-column layout: left content + right panel ── */}
       <div className="rd-body">
@@ -453,6 +566,34 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
                     Download
                   </button>
                 </div>
+              </div>
+            ) : (type === 'Note' || type === 'Document') ? (
+              <div className="rd-preview-area rd-preview-text" style={{ padding: '1.5rem', background: '#fff', borderRadius: '8px', border: '1px solid var(--border)', maxHeight: '600px', overflowY: 'auto' }}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
+                  {resource.content || 'No content provided.'}
+                </pre>
+              </div>
+            ) : (type === 'Email') ? (
+              <div className="rd-preview-area rd-preview-email" style={{ padding: '1.5rem', background: '#fff', borderRadius: '8px', border: '1px solid var(--border)', maxHeight: '600px', overflowY: 'auto' }}>
+                <div style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>
+                  <div style={{ marginBottom: '0.5rem' }}><strong>From:</strong> {resource.emailSender || 'Unknown'}</div>
+                  <div><strong>Subject:</strong> {resource.emailSubject || 'No Subject'}</div>
+                </div>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
+                  {resource.content || 'No email body provided.'}
+                </pre>
+              </div>
+            ) : (type === 'URL' || type === 'Google Drive') ? (
+              <div className="rd-preview-area rd-preview-link" style={{ padding: '3rem', textAlign: 'center', background: '#fff', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <span aria-hidden="true" style={{ fontSize: '3rem', marginBottom: '1rem', display: 'block' }}>{type === 'Google Drive' ? '📂' : '🔗'}</span>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--color-text-secondary)' }}>This resource is a {type}.</p>
+                {sourceUrl ? (
+                  <a href={sourceUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '0.75rem 1.5rem', background: 'var(--accent)', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontWeight: 500 }}>
+                    Open {type}
+                  </a>
+                ) : (
+                  <p style={{ color: 'var(--color-text-muted)' }}>No URL provided.</p>
+                )}
               </div>
             ) : (
               <>

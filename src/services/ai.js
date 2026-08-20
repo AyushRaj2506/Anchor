@@ -29,7 +29,12 @@ export async function analyzeResource(resource) {
     title: resource.title || '',
     description: resource.description || '',
     notes: resource.notes || '',
+    content: resource.content || '',
+    emailSender: resource.emailSender || '',
+    emailSubject: resource.emailSubject || '',
+    sourceUrl: resource.sourceUrl || '',
     category: resource.category || '',
+    type: resource.type || '',
     tags: Array.isArray(resource.tags) ? resource.tags : []
   };
 
@@ -43,6 +48,19 @@ export async function analyzeResource(resource) {
  * @param {Object} context - relevance context containing resources and tasks arrays.
  * @returns {Promise<Object>} Grounded structured response
  */
+/**
+ * Sends an authenticated request to analyze the actual file content of a resource.
+ * This calls the new analyze-resource endpoint which fetches the file from Supabase
+ * server-side and passes it to Gemini for deep document analysis.
+ *
+ * @param {{ resourceId: string, storagePath: string, fileType: string, fileName: string }} params
+ * @param {string} idToken - Firebase ID token for authentication
+ * @returns {Promise<Object>} Rich analysis including contentText, actionItems, deadlines, etc.
+ */
+export async function analyzeResourceFile({ resourceId, storagePath, fileType, fileName }, idToken) {
+  return fetchAI('/api/ai/analyze-resource', { resourceId, storagePath, fileType, fileName }, idToken);
+}
+
 export async function askQuestion(question, context) {
   return fetchAI('/api/ai/ask', { question, context });
 }
@@ -50,13 +68,15 @@ export async function askQuestion(question, context) {
 /**
  * Helper to fetch from local/deployed AI endpoint.
  */
-async function fetchAI(url, payload) {
+async function fetchAI(url, payload, idToken = null) {
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (idToken) {
+      headers['Authorization'] = `Bearer ${idToken}`;
+    }
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(payload),
     });
 

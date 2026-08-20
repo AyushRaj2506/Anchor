@@ -1,5 +1,7 @@
 import React from 'react';
 import StatCard from './StatCard';
+import './TaskStats.css';
+
 /**
  * TaskStats — the 4 summary cards at the top of the Tasks page.
  * Reuses the existing StatCard component.
