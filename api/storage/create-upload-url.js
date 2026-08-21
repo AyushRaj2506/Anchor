@@ -2,11 +2,18 @@ import { createClient } from '@supabase/supabase-js';
 import { verifyAuth } from '../utils/auth.js';
 import path from 'path';
 
-// Initialise Supabase Client with service role key for signing operations
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+let supabase;
+
+const initSupabase = () => {
+  if (supabase) return supabase;
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('Supabase URL and Service Role Key are required.');
+  }
+  supabase = createClient(url, key);
+  return supabase;
+};
 
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
@@ -21,6 +28,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    let supabaseClient;
+    try {
+      supabaseClient = initSupabase();
+    } catch (envErr) {
+      console.error('Supabase init error:', envErr);
+      return res.status(500).json({ success: false, error: 'Server misconfiguration: Missing Supabase environment variables.' });
+    }
+
     // 1. Authenticate user
     let decodedToken;
     try {
@@ -66,7 +81,7 @@ export default async function handler(req, res) {
     const storagePath = `${uid}/${resourceId}/${safeFileName}`;
 
     // 4. Generate signed upload URL via Supabase Storage
-    const { data, error } = await supabase.storage
+    const { data, error } = await supabaseClient.storage
       .from('anchor-resources')
       .createSignedUploadUrl(storagePath);
 

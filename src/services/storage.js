@@ -19,7 +19,13 @@ async function fetchStorage(endpoint, payload, idToken) {
     body: JSON.stringify(payload)
   });
 
-  const result = await response.json();
+  let result;
+  try {
+    result = await response.json();
+  } catch (err) {
+    throw new Error(`Server returned an unexpected response. Status: ${response.status}`);
+  }
+
   if (!response.ok || !result.success) {
     throw new Error(result.error || `Request failed with status ${response.status}`);
   }
