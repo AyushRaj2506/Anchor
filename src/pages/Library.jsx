@@ -6,7 +6,7 @@ import { RESOURCE_TYPES } from '../data/libraryData';
 import { auth, db } from '../config/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { uploadFile, deleteFile } from '../services/storage';
-import { analyzeResourceFile } from '../services/ai';
+import { analyzeResourceFile, analyzeResource, analyzeUrlResource } from '../services/ai';
 import './Library.css';
 
 /**
@@ -189,7 +189,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                 aiCategory:             result.category,
                 aiTags:                 result.tags,
                 aiImportantInformation: result.importantInformation,
-                aiDeadline:             result.deadline ?? null,
+                aiDeadline:             result.deadlines?.[0]?.deadline ?? null,
                 aiActionItems:          result.actionItems,
                 contentText:            result.contentText ?? null,
                 contentTruncated:       result.contentTruncated ?? false,
@@ -242,7 +242,8 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
         try {
           // If PDF/Image in Demo mode, construct dummy metadata
           const isFileDemo = (typeToUse === 'PDF' || typeToUse === 'Image');
-          await onAddResource({
+          
+          const newResourceData = {
             title:     newTitle.trim(),
             sourceUrl: newUrl.trim() || '',
             content:   newContent.trim() || '',
@@ -263,9 +264,11 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
               storageProvider: 'supabase',
               uploadedAt: new Date().toISOString()
             } : {})
-          });
+          };
 
-          // Reset modal
+          const newResourceId = await onAddResource(newResourceData);
+
+          // Reset modal immediately
           setShowAddModal(false);
           setNewTitle('');
           setNewCategory('');
@@ -278,6 +281,61 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
           setSelectedFile(null);
           setUploadState('idle');
           setUploadError('');
+
+          // ── Auto-trigger AI analysis for URL/Notes (non-blocking) ──
+          if (!isDemoUser && newResourceId && !isFileDemo) {
+            setAiNotification('✨ Analyzing your resource with AI...');
+
+            ;(async () => {
+              try {
+                const freshToken = await auth.currentUser.getIdToken(true);
+                let result = null;
+
+                if (typeToUse === 'URL' || typeToUse === 'Google Drive') {
+                  result = await analyzeUrlResource(newResourceData, freshToken);
+                } else {
+                  result = await analyzeResource(newResourceData); // Text/Note/Document
+                }
+
+                if (result && onUpdateResource) {
+                  await onUpdateResource(newResourceId, {
+                    aiSummary:              result.summary,
+                    aiCategory:             result.category,
+                    aiTags:                 result.tags,
+                    aiImportantInformation: result.importantInformation,
+                    aiDeadline:             result.deadlines?.[0]?.deadline ?? null,
+                    aiActionItems:          result.actionItems,
+                    contentText:            result.contentText ?? null,
+                    contentTruncated:       result.contentTruncated ?? false,
+                    deadlines:              result.deadlines ?? [],
+                  });
+                }
+
+                let createdCount = 0;
+                if (result && onCreateTasksFromAnalysis && result.actionItems?.length > 0) {
+                  createdCount = await onCreateTasksFromAnalysis(
+                    newResourceId,
+                    result.actionItems,
+                    result.category || newResourceData.category
+                  );
+                }
+
+                if (result && !result.contentText && (typeToUse === 'URL' || typeToUse === 'Google Drive')) {
+                  setAiNotification('⚠️ Resource saved, but URL content was inaccessible (private or protected).');
+                } else if (createdCount > 0) {
+                  setAiNotification(`✅ AI analysis complete. ${createdCount} task${createdCount !== 1 ? 's' : ''} created from action items.`);
+                } else {
+                  setAiNotification('✅ AI analysis complete.');
+                }
+
+              } catch (aiErr) {
+                console.error('Auto AI analysis failed for text/url:', aiErr);
+                setAiNotification('⚠️ Resource saved, but AI analysis could not be completed.');
+              } finally {
+                setTimeout(() => setAiNotification(''), 7000);
+              }
+            })();
+          }
         } catch (err) {
           console.error('Demo/Text resource addition failed:', err);
         }
@@ -428,7 +486,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
           </div>
 
           {/* Resource rows */}
-          <div className="card lib-list-card">
+          <div className="lib-list-container">
             {loading ? (
               <div className="lib-empty" role="status" aria-live="polite">
                 <p className="lib-empty-title">Loading your resources...</p>

@@ -23,7 +23,8 @@
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background-color: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,13 +37,14 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-modal);
   width: 100%;
-  max-width: 520px;
+  max-width: 540px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  animation: modal-enter 200ms ease-out both;
 }
 
 .task-modal-header {
@@ -200,12 +202,13 @@
 }
 
 .tasks-title {
-  font-size: clamp(1.4rem, 2.5vw, 1.85rem);
-  font-weight: 800;
+  font-size: clamp(1.6rem, 2.8vw, 2.2rem);
+  font-weight: 700;
+  font-family: var(--font-display);
   color: var(--color-text-primary);
   margin: 0 0 3px 0;
   line-height: 1.2;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
 }
 
 .tasks-subtitle {
@@ -259,10 +262,13 @@
 
 /* ── Single Kanban column ── */
 .kanban-col {
-  background: var(--color-surface-secondary);
-  border: 1px solid var(--color-border);
+  background: var(--glass-bg-secondary);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   border-top: 3px solid var(--col-accent, var(--color-border));
+  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: 0;

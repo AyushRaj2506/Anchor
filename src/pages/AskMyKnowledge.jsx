@@ -1,59 +1,78 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { searchKnowledge } from '../services/relevance';
 import { askQuestion } from '../services/ai';
+import { auth } from '../config/firebase';
 import './AskMyKnowledge.css';
 
 /**
- * AskMyKnowledge — Chatbot page grounded in user's saved resources and tasks.
- *
- * Hardcoded suggested questions and tips have been removed.
- * Example prompts are generated dynamically from actual user resources/tasks.
- * Sources are shown inline below each assistant answer.
+ * AskMyKnowledge — Production-quality grounded AI chat.
  */
-function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate }) {
-  const [messages, setMessages] = useState([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingText, setTypingText] = useState('Searching your knowledge...');
+function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate, user }) {
+  const [messages,     setMessages]    = useState([]);
+  const [inputValue,   setInputValue]  = useState('');
+  const [isTyping,     setIsTyping]    = useState(false);
+  const [typingText,   setTypingText]  = useState('Searching your knowledge...');
   const messagesEndRef = useRef(null);
-  const textareaRef = useRef(null);
+  const textareaRef    = useRef(null);
 
   // ── Scroll to bottom on new message ──────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // ── Focus input on mount ─────────────────────────────────────────────
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, []);
+
   // ── Generate dynamic example prompts from actual data ────────────────
   const examplePrompts = useMemo(() => {
+    if (resources.length === 0 && tasks.length === 0) return [];
+
     const prompts = [];
 
-    if (resources.length === 0 && tasks.length === 0) {
-      return []; // No data — show no fake prompts
+    // Prompt from individual resource titles
+    const titledResources = resources.filter(r => r.title && r.title.trim().length > 3);
+    if (titledResources.length > 0) {
+      const r = titledResources[0];
+      const t = (r.type || '').toLowerCase();
+      if (t === 'pdf' || t === 'document') {
+        prompts.push(`Summarize my "${r.title}" document`);
+      } else if (t === 'note') {
+        prompts.push(`What are the key points in my "${r.title}" note?`);
+      } else {
+        prompts.push(`What does my "${r.title}" resource cover?`);
+      }
+    }
+    if (titledResources.length > 1) {
+      const r = titledResources[1];
+      prompts.push(`Explain the main ideas from "${r.title}"`);
     }
 
-    // Build prompts from actual resource categories/titles
+    // Category-level prompts
     const categories = [...new Set(
-      resources
-        .map(r => r.aiCategory || r.category)
-        .filter(Boolean)
-    )].slice(0, 3);
-
+      resources.map(r => r.aiCategory || r.category).filter(Boolean)
+    )].slice(0, 2);
     categories.forEach(cat => {
-      prompts.push(`What are the important points in my ${cat} resources?`);
+      if (!prompts.some(p => p.toLowerCase().includes(cat.toLowerCase()))) {
+        prompts.push(`What are the important points in my ${cat} resources?`);
+      }
     });
 
-    // Add deadline prompt if tasks exist
+    // Task-related prompts
     if (tasks.length > 0) {
-      prompts.push('What are my upcoming deadlines?');
+      const upcomingTasks = tasks.filter(t =>
+        t.deadlineMs && t.status !== 'completed' && t.deadlineMs > Date.now()
+      );
+      if (upcomingTasks.length > 0) {
+        prompts.push('What deadlines are coming up?');
+      } else {
+        prompts.push('What tasks are still pending?');
+      }
     }
 
-    // Add a content prompt if any resource has contentText
-    const hasContent = resources.some(r => r.contentText);
-    if (hasContent && categories.length > 0) {
-      prompts.push(`Summarize my ${categories[0]} notes.`);
-    }
-
-    // Cap at 4 prompts
     return prompts.slice(0, 4);
   }, [resources, tasks]);
 
@@ -87,6 +106,15 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
     const hasResources = context.resources && context.resources.length > 0;
     const hasTasks     = context.tasks     && context.tasks.length     > 0;
 
+    console.log("[ANCHOR DEBUG] Question:", trimmed);
+    console.log("[ANCHOR DEBUG] Current user:", user);
+    console.log("[ANCHOR DEBUG] User UID:", user?.uid || user?.id);
+    console.log("[ANCHOR DEBUG] Resources fetched:", resources);
+    console.log("[ANCHOR DEBUG] Resource count:", resources?.length);
+    console.log("[ANCHOR DEBUG] Matching resources:", context.resources);
+    console.log("[ANCHOR DEBUG] Knowledge sent to Gemini:", context);
+    console.log("[ANCHOR DEBUG] Gemini request started");
+
     // Short-circuit: no relevant context found locally
     if (!hasResources && !hasTasks) {
       setTimeout(() => {
@@ -107,7 +135,12 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
 
     // ── Call Gemini via Vercel API ──
     try {
-      const response = await askQuestion(trimmed, context);
+      let idToken = null;
+      if (auth.currentUser && (!user || !user.isDemo)) {
+        idToken = await auth.currentUser.getIdToken();
+      }
+
+      const response = await askQuestion(trimmed, context, idToken);
       clearTimeout(loadingTimer);
       setIsTyping(false);
 
@@ -132,14 +165,16 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
         notFound: response.notFound,
       }]);
 
+      console.log("[ANCHOR DEBUG] Gemini response:", response);
+
     } catch (err) {
       clearTimeout(loadingTimer);
-      console.error('Ask My Knowledge failed:', err);
+      console.error("[ANCHOR DEBUG] ERROR:", err);
       setIsTyping(false);
       setMessages(prev => [...prev, {
         id:      'a-' + Date.now(),
         role:    'assistant',
-        content: "Sorry, I couldn't search your knowledge right now. Please try again.",
+        content: "I couldn't process that question right now. Please try again.",
         time:    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         sources: [],
         error: true,
@@ -159,7 +194,12 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
     setInputValue(e.target.value);
     const ta = e.target;
     ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+    ta.style.height = Math.min(ta.scrollHeight, 150) + 'px';
+  }
+
+  function handleClearChat() {
+    setMessages([]);
+    if (textareaRef.current) textareaRef.current.focus();
   }
 
   // ── Render a single message content (paragraph + bullet support) ──────
@@ -177,164 +217,185 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
     }).filter(Boolean);
   }
 
+  function formatBytes(bytes) {
+    if (!bytes) return '';
+    const mb = bytes / 1024 / 1024;
+    if (mb >= 1) return `${mb.toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  }
+
+  function typeIcon(t) {
+    const type = (t || '').toLowerCase();
+    if (type === 'pdf') return '📄';
+    if (type === 'image') return '🖼';
+    if (type === 'note') return '📝';
+    if (type === 'url') return '🔗';
+    return '📋';
+  }
+
   return (
-    <main className="ak-page" id="main-content" tabIndex={-1}>
-
-      {/* Page Header */}
-      <section className="ak-header" aria-labelledby="ak-page-title">
-        <div>
-          <h1 id="ak-page-title" className="ak-title">Ask My Knowledge</h1>
-          <p className="ak-subtitle">
-            Ask questions about your saved resources and tasks. Answers are grounded in your knowledge only.
-          </p>
+    <main className="ak-chat-app" id="main-content" tabIndex={-1}>
+      {/* Header */}
+      <header className="ak-chat-header">
+        <div className="ak-chat-header-info">
+          <span className="ak-chat-header-icon" aria-hidden="true">✨</span>
+          <div className="ak-chat-header-text">
+            <h1 className="ak-chat-title">Anchor</h1>
+            <p className="ak-chat-subtitle">Ask My Knowledge</p>
+            <p className="ak-chat-tagline">Grounded in your saved knowledge</p>
+          </div>
         </div>
-      </section>
+        {messages.length > 0 && (
+          <button className="ak-chat-clear" onClick={handleClearChat} aria-label="Clear chat">
+            Clear chat
+          </button>
+        )}
+      </header>
 
-      {/* Chat Container */}
-      <div className="ak-chat-container" aria-label="Chat interface">
-
-        {/* Messages area */}
-        <div
-          className="ak-messages"
-          role="log"
-          aria-label="Conversation history"
-          aria-live="polite"
-        >
-          {/* Empty state */}
-          {messages.length === 0 && !isTyping && (
-            <div className="ak-empty">
-              <span className="ak-empty-icon" aria-hidden="true">✨</span>
-              <p className="ak-empty-title">Ask My Knowledge</p>
-              {hasAnyData ? (
-                <>
-                  <p className="ak-empty-desc">
-                    Ask anything about your saved resources and tasks. Your answers are grounded only in your saved knowledge.
-                  </p>
-                  {examplePrompts.length > 0 && (
-                    <div className="ak-example-prompts" aria-label="Example questions">
-                      {examplePrompts.map((prompt, idx) => (
-                        <button
-                          key={idx}
-                          className="ak-example-btn"
-                          onClick={() => handleSend(prompt)}
-                          disabled={isTyping}
-                          aria-label={`Ask: ${prompt}`}
-                        >
-                          {prompt}
-                        </button>
-                      ))}
+      {/* Messages */}
+      <div className="ak-chat-messages" role="log" aria-live="polite">
+        {messages.length === 0 && !isTyping ? (
+          <div className="ak-chat-empty">
+             <span className="ak-empty-sparkle" aria-hidden="true">✨</span>
+             <h2 className="ak-empty-title">Ask My Knowledge</h2>
+             {hasAnyData ? (
+               <>
+                 <p className="ak-empty-desc">Ask anything about your saved resources and tasks.</p>
+                 <div className="ak-empty-suggestions">
+                   {examplePrompts.map((prompt, idx) => (
+                     <button
+                       key={idx}
+                       className="ak-empty-suggestion-btn"
+                       onClick={() => handleSend(prompt)}
+                       disabled={isTyping}
+                     >
+                       {prompt}
+                     </button>
+                   ))}
+                 </div>
+               </>
+             ) : (
+               <>
+                 <p className="ak-empty-desc">Your knowledge base is empty<br/>Add a resource to start asking Anchor questions about your college material.</p>
+                 <button
+                   className="ak-empty-add-btn"
+                   onClick={() => onNavigate && onNavigate('library')}
+                 >
+                   + Add Resource
+                 </button>
+               </>
+             )}
+          </div>
+        ) : (
+          <div className="ak-chat-thread">
+             {messages.map(msg => {
+                const isAI = msg.role === 'assistant';
+                return (
+                  <div key={msg.id} className={`ak-message-wrapper ${isAI ? 'ak-ai' : 'ak-user'}`}>
+                    <div className="ak-message-info">
+                      {isAI ? (
+                        <div className="ak-message-sender">
+                           <span className="ak-sender-avatar" aria-hidden="true">✨</span>
+                           <span className="ak-sender-name">Anchor</span>
+                           <span className="ak-sender-time">{msg.time}</span>
+                        </div>
+                      ) : (
+                        <div className="ak-message-sender">
+                           <span className="ak-sender-name">You</span>
+                           <span className="ak-sender-time">{msg.time}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </>
-              ) : (
-                <p className="ak-empty-desc">
-                  You don't have any saved knowledge yet. Upload a resource or create a task to start asking questions.
-                </p>
-              )}
-            </div>
-          )}
+                    
+                    <div className={`ak-message-bubble ${isAI ? 'ak-bubble-ai' : 'ak-bubble-user'}`}>
+                      {renderMessageContent(msg.content)}
+                    </div>
 
-          {/* Message list */}
-          {messages.map((msg) => {
-            const isAssistant = msg.role === 'assistant';
-            return (
-              <div
-                key={msg.id}
-                className={`ak-msg-wrapper ${isAssistant ? 'ak-msg-wrapper--assistant' : 'ak-msg-wrapper--user'}`}
-              >
-                <div
-                  className={`ak-avatar ${isAssistant ? 'ak-avatar--assistant' : 'ak-avatar--user'}`}
-                  aria-hidden="true"
-                >
-                  {isAssistant ? '✨' : 'A'}
-                </div>
-
-                <div className={`ak-msg ${isAssistant ? 'ak-msg--assistant' : 'ak-msg--user'}`}>
-                  <div className="ak-msg-bubble">
-                    {renderMessageContent(msg.content)}
-                  </div>
-
-                  {/* Inline Sources — only for assistant messages with sources */}
-                  {isAssistant && msg.sources && msg.sources.length > 0 && (
-                    <div className="ak-inline-sources" aria-label="Sources">
-                      {msg.sources.map((src, sidx) => (
-                        <button
-                          key={sidx}
-                          className="ak-inline-source-btn"
-                          onClick={() => {
-                            if (src.sourceType === 'resource' && src.original) {
-                              onOpenResource(src.original);
-                            } else if (src.sourceType === 'task') {
-                              onNavigate('tasks');
+                    {isAI && msg.sources && msg.sources.length > 0 && (
+                      <div className="ak-message-sources">
+                        <p className="ak-sources-title">Sources</p>
+                        <div className="ak-sources-list">
+                          {msg.sources.map((src, idx) => {
+                            if (src.sourceType === 'resource') {
+                              const r = src.original;
+                              return (
+                                <button 
+                                  key={idx} 
+                                  className="ak-source-chip"
+                                  onClick={() => onOpenResource(r)}
+                                >
+                                  <span className="ak-source-chip-icon">{typeIcon(r.type)}</span>
+                                  <span className="ak-source-chip-text">{r.title}</span>
+                                  <span className="ak-source-chip-meta">
+                                    {r.type || 'Document'} {r.fileSize ? `· ${formatBytes(r.fileSize)}` : ''}
+                                  </span>
+                                </button>
+                              );
                             }
-                          }}
-                          aria-label={`Open source: ${src.title}`}
-                        >
-                          <span aria-hidden="true">
-                            {src.sourceType === 'task' ? '☑' : '📄'}
-                          </span>
-                          {src.title}
-                        </button>
-                      ))}
+                            const t = src.original;
+                            return (
+                              <button 
+                                key={idx} 
+                                className="ak-source-chip"
+                                onClick={() => onNavigate('tasks')}
+                              >
+                                <span className="ak-source-chip-icon">☑</span>
+                                <span className="ak-source-chip-text">{t.title}</span>
+                                <span className="ak-source-chip-meta">Task · {t.status || 'pending'}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+             })}
+             
+             {isTyping && (
+                <div className="ak-message-wrapper ak-ai">
+                  <div className="ak-message-info">
+                    <div className="ak-message-sender">
+                       <span className="ak-sender-avatar" aria-hidden="true">✨</span>
+                       <span className="ak-sender-name">Anchor</span>
                     </div>
-                  )}
-
-                  <span className="ak-msg-time">{msg.time}</span>
+                  </div>
+                  <div className="ak-message-bubble ak-bubble-ai ak-typing-bubble">
+                    <div className="ak-dots">
+                      <span></span><span></span><span></span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+             )}
+             <div ref={messagesEndRef} />
+          </div>
+        )}
+      </div>
 
-          {/* Typing indicator */}
-          {isTyping && (
-            <div className="ak-msg-wrapper ak-msg-wrapper--assistant">
-              <div className="ak-avatar ak-avatar--assistant" aria-hidden="true">✨</div>
-              <div className="ak-typing-wrapper">
-                <div className="ak-typing-indicator" aria-label={typingText}>
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-                <span className="ak-typing-label">{typingText}</span>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Composer */}
-        <div className="ak-composer">
-          <label htmlFor="ak-composer-textarea" className="ak-label-sr">
-            Ask a question about your knowledge
-          </label>
+      {/* Composer */}
+      <div className="ak-chat-composer">
+        <div className="ak-composer-inner">
           <textarea
-            id="ak-composer-textarea"
             ref={textareaRef}
-            className="ak-composer-textarea"
-            placeholder="Ask about your saved knowledge..."
+            className="ak-composer-input"
+            placeholder="Ask anything about your saved knowledge..."
             value={inputValue}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             disabled={isTyping}
             rows={1}
-            aria-label="Ask a question"
+            aria-label="Ask about your saved knowledge"
           />
           <button
-            className="ak-send-btn"
+            className="ak-composer-send"
             onClick={() => handleSend()}
             disabled={!inputValue.trim() || isTyping}
-            aria-label="Send question"
+            aria-label="Send message"
           >
-            Send
+            ➤
           </button>
         </div>
       </div>
-
-      <p className="ak-disclaimer" aria-live="off">
-        🛡 Answers are based only on your saved resources and tasks. Anchor does not use external knowledge.
-      </p>
-
     </main>
   );
 }

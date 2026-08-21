@@ -3,7 +3,7 @@
    Inter font + CSS custom properties + global resets + animations
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap');
 
 /* ==========================================================================
    DESIGN TOKENS — LIGHT THEME (default)
@@ -98,8 +98,9 @@
   --space-2xl: 48px;
 
   /* ── Typography ── */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system,
-               BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans:    'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, -apple-system,
+                  BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Space Grotesk', 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-size-xs:   0.72rem;
   --font-size-sm:   0.8rem;
   --font-size-base: 0.875rem;
@@ -107,7 +108,7 @@
   --font-size-lg:   1.15rem;
   --font-size-xl:   1.4rem;
   --font-size-2xl:  1.75rem;
-  --font-size-3xl:  2.1rem;
+  --font-size-3xl:  2.2rem;
 
   /* ── Transition ── */
   --transition-fast:   120ms ease;
@@ -115,6 +116,17 @@
   --transition-slow:   280ms ease;
   --transition-theme:  background-color 200ms ease, color 200ms ease,
                        border-color 200ms ease, box-shadow 200ms ease;
+
+  /* ── Glassmorphism ── */
+  --glass-bg:           rgba(255, 255, 255, 0.72);
+  --glass-bg-secondary: rgba(247, 245, 241, 0.80);
+  --glass-border:       rgba(255, 255, 255, 0.50);
+  --glass-blur:         blur(14px);
+
+  /* ── Enhanced Shadows ── */
+  --shadow-card:        0 2px 8px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03);
+  --shadow-card-hover:  0 8px 28px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.05);
+  --shadow-modal:       0 24px 64px rgba(0,0,0,0.18), 0 6px 20px rgba(0,0,0,0.10);
 }
 
 /* ==========================================================================
@@ -124,32 +136,38 @@
 :root[data-theme="dark"] {
 
   /* ── Backgrounds ── */
-  --color-bg:               #111812;   /* deep forest-charcoal */
-  --color-surface:          #1a2519;   /* dark green-gray card surface */
-  --color-surface-secondary:#1e2e1c;   /* knowledge-card / secondary */
-  --color-surface-elevated: #213020;   /* slightly lighter elevated surface */
-  --color-surface-hover:    #243522;   /* hover tint */
+  --color-bg:               #0b140e;   /* deep forest-charcoal */
+  --color-surface:          #132018;   /* primary surface */
+  --color-surface-secondary:#18281d;   /* elevated surface */
+  --color-surface-elevated: #18281d;   /* elevated surface */
+  --color-surface-hover:    #1a2a20;   /* hover tint */
+
+  /* ── Glassmorphism (dark) ── */
+  --glass-bg:           rgba(26, 37, 25, 0.78);
+  --glass-bg-secondary: rgba(30, 46, 28, 0.85);
+  --glass-border:       rgba(255, 255, 255, 0.08);
+  --glass-blur:         blur(14px);
 
   /* ── Header ── */
-  --color-header-bg:        #111812;
-  --color-header-border:    #253322;
+  --color-header-bg:        #111d14;
+  --color-header-border:    rgba(255,255,255,0.10);
 
   /* ── Text ── */
-  --color-text-primary:     #e8e3dc;   /* warm off-white */
-  --color-text-secondary:   #96a896;   /* muted sage-gray */
-  --color-text-muted:       #657065;   /* darker muted for metadata */
+  --color-text-primary:     #f5f7f2;   /* primary text */
+  --color-text-secondary:   #b7c2b8;   /* secondary text */
+  --color-text-muted:       #89968b;   /* muted text */
 
   /* ── Borders ── */
-  --color-border:           #2d3e2b;
-  --color-border-light:     #263625;
+  --color-border:           rgba(255,255,255,0.10);
+  --color-border-light:     rgba(255,255,255,0.05);
 
   /* ── Accent ── */
-  --color-accent:           #d48b6a;   /* slightly warmer terracotta for dark */
-  --color-accent-hover:     #c97b5a;
+  --color-accent:           #c97b5a;   /* terracotta */
+  --color-accent-hover:     #b86c4a;
   --color-accent-soft:      #3a2218;
 
   /* ── Green ── */
-  --color-green:            #6aab5e;
+  --color-green:            #7fa873;   /* accent green */
   --color-green-hover:      #58954c;
   --color-green-soft:       #182c16;
   --color-green-muted:      #5a8e50;
@@ -172,9 +190,9 @@
   --color-col-done:         #65a058;
 
   /* ── Input ── */
-  --color-input-bg:         #192619;
-  --color-input-border:     #2d3e2b;
-  --color-input-border-focus: #d48b6a;
+  --color-input-bg:         #132018;
+  --color-input-border:     rgba(255,255,255,0.10);
+  --color-input-border-focus: #c97b5a;
   --color-input-focus-ring: rgba(212,139,106,0.2);
 
   /* ── Shadows ── */
@@ -264,6 +282,25 @@ body {
   100% { background-position:  200% center; }
 }
 
+/* ── Modal entrance ── */
+@keyframes modal-enter {
+  from { opacity: 0; transform: scale(0.97) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+/* ── Chat message entrance ── */
+@keyframes message-appear {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* ── Button press ── */
+@keyframes btn-press {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
 /* ── Sidebar accent bar ── */
 @keyframes anchor-accent-in {
   from { transform: scaleY(0); opacity: 0; }
@@ -287,6 +324,72 @@ body {
 /* Icon pop — applied briefly via JS */
 .icon-pop {
   animation: anchor-pop 220ms ease both;
+}
+
+/* Modal entrance */
+.modal-enter {
+  animation: modal-enter 200ms ease-out both;
+}
+
+/* AI message entrance */
+.message-appear {
+  animation: message-appear 220ms ease-out both;
+}
+
+/* ── Global Card Base ── */
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-theme),
+              box-shadow var(--transition-base),
+              border-color var(--transition-base),
+              transform var(--transition-base);
+}
+
+/* ── Skeleton loading ── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-hover) 50%,
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: anchor-shimmer 1.5s infinite linear;
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  color: transparent !important;
+}
+
+/* ── Primary action button (shared) ── */
+.btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast),
+              transform var(--transition-fast),
+              box-shadow var(--transition-fast);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(201,123,90,0.32);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ==========================================================================
@@ -376,4 +479,9 @@ select {
   background-color: var(--color-input-bg);
   color: var(--color-text-primary);
   border-color: var(--color-input-border);
+}
+
+[data-theme="dark"] option {
+  background-color: var(--color-input-bg);
+  color: var(--color-text-primary);
 }

@@ -395,7 +395,12 @@ function App() {
       if (existingSourceTaskIds.has(titleKey)) continue;
 
       const deadlineMs = item.deadline ? (() => {
-        const d = new Date(item.deadline);
+        let dateString = item.deadline;
+        // If the date string does not contain a 4-digit year, append the current year
+        if (!/\d{4}/.test(dateString)) {
+          dateString = `${dateString} ${new Date().getFullYear()}`;
+        }
+        const d = new Date(dateString);
         return isNaN(d.getTime()) ? null : d.getTime();
       })() : null;
 
@@ -583,6 +588,10 @@ function App() {
           theme={theme}
           onToggleTheme={handleToggleTheme}
           user={user}
+          resources={resources}
+          tasks={tasks}
+          onOpenResource={handleOpenResource}
+          onNavigate={handleNavigate}
         />
         <div className="app-content">
           <div key={activePage} className="page-enter">

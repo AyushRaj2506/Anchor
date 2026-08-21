@@ -61,8 +61,27 @@ export async function analyzeResourceFile({ resourceId, storagePath, fileType, f
   return fetchAI('/api/ai/analyze-resource', { resourceId, storagePath, fileType, fileName }, idToken);
 }
 
-export async function askQuestion(question, context) {
-  return fetchAI('/api/ai/ask', { question, context });
+/**
+ * Sends a URL to the backend for server-side scraping and Gemini analysis.
+ * 
+ * @param {Object} resource - The resource payload containing url, title, description.
+ * @returns {Promise<Object>} Rich analysis including contentText, actionItems, deadlines, etc.
+ */
+export async function analyzeUrlResource(resource, idToken = null) {
+  // Clean resource to send only required fields
+  const cleanedResource = {
+    url: resource.sourceUrl || resource.url || '',
+    title: resource.title || '',
+    description: resource.description || '',
+    category: resource.category || '',
+    tags: Array.isArray(resource.tags) ? resource.tags : []
+  };
+
+  return fetchAI('/api/ai/analyze-url', cleanedResource, idToken);
+}
+
+export async function askQuestion(question, context, idToken) {
+  return fetchAI('/api/ai/ask', { question, context }, idToken);
 }
 
 /**

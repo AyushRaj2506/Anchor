@@ -112,7 +112,7 @@ Analyze the provided document and extract structured information.
 CRITICAL RULES:
 1. Only use information EXPLICITLY present in the document.
 2. Do NOT invent facts, dates, deadlines, names, requirements, or action items.
-3. If a deadline is mentioned but the absolute date cannot be resolved from the document alone, set deadline to null.
+3. If a deadline is mentioned, extract it EXACTLY as stated (e.g., 'August 25'). Do NOT discard it just because the year is missing.
 4. If information is unavailable for a field, return null (strings) or [] (arrays).
 5. contentText should capture the most useful raw content for future Q&A, up to ~2000 words.
 6. Only add actionItems when the document explicitly asks someone to DO something with a clear deliverable.
@@ -134,7 +134,7 @@ Return ONLY valid JSON matching this EXACT schema:
     {
       "title": "Name of the deliverable or event",
       "description": "Additional context",
-      "deadline": "YYYY-MM-DD if determinable from document, otherwise null",
+      "deadline": "YYYY-MM-DD or extracted date string (e.g. 'August 25') if determinable, otherwise null",
       "sourceText": "Exact quote from the document"
     }
   ],
@@ -142,7 +142,7 @@ Return ONLY valid JSON matching this EXACT schema:
     {
       "title": "Short action title",
       "description": "What needs to be done",
-      "deadline": "YYYY-MM-DD if determinable, otherwise null"
+      "deadline": "YYYY-MM-DD or extracted date string (e.g. 'August 25') if determinable, otherwise null"
     }
   ],
   "contentText": "The most useful extracted text content from this document for later Q&A, approximately 1000-2000 words. Must be actual document text, not your summary."
@@ -151,7 +151,7 @@ Return ONLY valid JSON matching this EXACT schema:
 
     // ── 10. Call Gemini with inline file data ────────────────────────
     const fetchPromise = ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       contents: [
         {
           role: 'user',

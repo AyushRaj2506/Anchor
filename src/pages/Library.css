@@ -8,6 +8,8 @@
   flex-direction: column;
   gap: 20px;
   width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
   min-width: 0;
   box-sizing: border-box;
   animation: none; /* handled by App.jsx page-enter wrapper */
@@ -23,12 +25,13 @@
 }
 
 .lib-title {
-  font-size: clamp(1.4rem, 2.5vw, 1.85rem);
-  font-weight: 800;
+  font-size: clamp(1.6rem, 2.8vw, 2.2rem);
+  font-weight: 700;
+  font-family: var(--font-display);
   color: var(--color-text-primary);
   margin: 0 0 3px 0;
   line-height: 1.2;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
 }
 
 .lib-subtitle {
@@ -105,13 +108,22 @@
 }
 
 .lib-list-card {
-  padding: 16px 20px;
+  padding: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 
 .lib-resource-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
 }
 
 /* ── Empty state ── */
@@ -354,7 +366,9 @@
 .lib-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(0,0,0,0.5);
+  background-color: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -364,13 +378,15 @@
 
 .lib-modal-container {
   background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 440px;
+  max-width: 580px;
   max-height: calc(100vh - 32px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-modal);
+  animation: modal-enter 200ms ease-out both;
 }
 
 .lib-modal-header {

@@ -115,7 +115,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
             aiCategory:            result.category,
             aiTags:                result.tags,
             aiImportantInformation: result.importantInformation,
-            aiDeadline:            result.deadline ?? null,
+            aiDeadline:            result.deadlines?.[0]?.deadline ?? null,
             aiActionItems:         result.actionItems,
             // New fields from real file analysis
             contentText:           result.contentText ?? null,
@@ -221,13 +221,12 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
         <div className="rd-header-actions">
           {/* AI Analysis button */}
           <button
-            className="rd-action-btn"
-            style={{ background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600 }}
+            className={`rd-action-btn rd-action-btn--primary${analyzing ? ' rd-action-btn--loading' : ''}`}
             onClick={handleAnalyze}
             disabled={analyzing}
             aria-label={aiSummary ? "Analyze this resource again with AI" : "Analyze this resource with AI"}
           >
-            {analyzing ? '✨ Analyzing...' : aiSummary ? '✨ Analyze Again' : '✨ Analyze with AI'}
+            {analyzing ? '⏳ Analyzing...' : aiSummary ? '✨ Re-analyze' : '✨ Analyze with AI'}
           </button>
 
           {/* Bookmark — fully functional, persists to Firestore */}
@@ -237,7 +236,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
             aria-pressed={Boolean(bookmarked)}
             onClick={handleBookmarkToggle}
           >
-            {bookmarked ? '🔖 Bookmarked' : '🔖 Bookmark'}
+            {bookmarked ? <><span className="rd-emoji">🔖</span> Bookmarked</> : <><span className="rd-emoji">🔖</span> Bookmark</>}
           </button>
 
           {/* Delete — fully functional */}
@@ -246,7 +245,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
             aria-label={`Delete ${title}`}
             onClick={handleDelete}
           >
-            🗑 Delete
+            <span className="rd-emoji">🗑</span> Delete
           </button>
         </div>
       </div>
@@ -371,7 +370,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
             <section className="card rd-section rd-ai-section" aria-labelledby="rd-ai-heading">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', borderBottom: '1px solid var(--border)', paddingBottom: '12px', marginBottom: '16px' }}>
                 <h2 id="rd-ai-heading" className="rd-section-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)' }}>
-                  <span aria-hidden="true">✨</span> AI Analysis
+                  <span className="rd-emoji" aria-hidden="true">✨</span> AI Analysis
                 </h2>
                 {aiAnalyzedAt && !analyzing && (
                   <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
@@ -436,14 +435,19 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
                     <div>
                       <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '6px' }}>AI Deadline</h3>
                       <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: aiDeadline ? '600' : 'normal', color: aiDeadline ? '#c0392b' : 'var(--color-text-primary)' }}>
-                        {aiDeadline ? `📅 ${aiDeadline}` : 'Not specified'}
+                        {aiDeadline ? <><span className="rd-emoji">📅</span> {aiDeadline}</> : 'Not specified'}
                       </p>
                     </div>
                     <div>
                       <h3 style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '600', marginBottom: '8px' }}>Action Items</h3>
                       {aiActionItems.length > 0 ? (
                         <ul style={{ margin: 0, paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.88rem', color: 'var(--color-text-primary)' }}>
-                          {aiActionItems.map((item, idx) => <li key={idx}>{item}</li>)}
+                          {aiActionItems.map((item, idx) => (
+                            <li key={idx}>
+                              <strong>{typeof item === 'string' ? item : item.title}</strong>
+                              {item.description && <div style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', marginTop: '2px' }}>{item.description}</div>}
+                            </li>
+                          ))}
                         </ul>
                       ) : (
                         <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Not specified</p>
@@ -480,19 +484,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
             </section>
           )}
 
-          {/* ── Tags card ── */}
-          <section className="card rd-section" aria-labelledby="rd-tags-heading">
-            <h2 id="rd-tags-heading" className="rd-section-title">Tags</h2>
-            {tags.length > 0 ? (
-              <div className="rd-tag-row">
-                {tags.map((tag) => (
-                  <span key={tag} className="rd-tag">{tag}</span>
-                ))}
-              </div>
-            ) : (
-              <p className="rd-empty-hint">No tags added for this resource.</p>
-            )}
-          </section>
+          {/* Tags are already shown in the hero card above — no duplicate section */}
 
         </div>
 
@@ -503,7 +495,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
           <section className="card rd-section rd-preview-card" aria-labelledby="rd-preview-heading">
             <div className="rd-preview-header">
               <h2 id="rd-preview-heading" className="rd-section-title">
-                <span aria-hidden="true">👁</span> Document Preview
+                <span className="rd-emoji" aria-hidden="true">👁</span> Document Preview
               </h2>
               {(signedUrl || sourceUrl) && (
                 <a
@@ -534,7 +526,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
               </div>
             ) : resource.storagePath && type === 'PDF' ? (
               <div className="rd-preview-area rd-preview-pdf">
-                <span className="rd-pdf-icon" aria-hidden="true">📄</span>
+                <span className="rd-pdf-icon rd-emoji" aria-hidden="true">📄</span>
                 <div className="rd-pdf-info">
                   <p className="rd-pdf-filename">{resource.fileName || `${title}.pdf`}</p>
                   <p className="rd-pdf-type">PDF Document</p>
@@ -569,23 +561,23 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
               </div>
             ) : (type === 'Note' || type === 'Document') ? (
               <div className="rd-preview-area rd-preview-text" style={{ padding: '1.5rem', background: '#fff', borderRadius: '8px', border: '1px solid var(--border)', maxHeight: '600px', overflowY: 'auto' }}>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: '#111', lineHeight: 1.6 }}>
                   {resource.content || 'No content provided.'}
                 </pre>
               </div>
             ) : (type === 'Email') ? (
               <div className="rd-preview-area rd-preview-email" style={{ padding: '1.5rem', background: '#fff', borderRadius: '8px', border: '1px solid var(--border)', maxHeight: '600px', overflowY: 'auto' }}>
-                <div style={{ marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', fontSize: '0.9rem', color: 'var(--color-text-primary)' }}>
+                <div style={{ marginBottom: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '1rem', fontSize: '0.9rem', color: '#111' }}>
                   <div style={{ marginBottom: '0.5rem' }}><strong>From:</strong> {resource.emailSender || 'Unknown'}</div>
                   <div><strong>Subject:</strong> {resource.emailSubject || 'No Subject'}</div>
                 </div>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: '#111', lineHeight: 1.6 }}>
                   {resource.content || 'No email body provided.'}
                 </pre>
               </div>
             ) : (type === 'URL' || type === 'Google Drive') ? (
               <div className="rd-preview-area rd-preview-link" style={{ padding: '3rem', textAlign: 'center', background: '#fff', borderRadius: '8px', border: '1px solid var(--border)' }}>
-                <span aria-hidden="true" style={{ fontSize: '3rem', marginBottom: '1rem', display: 'block' }}>{type === 'Google Drive' ? '📂' : '🔗'}</span>
+                <span className="rd-emoji" aria-hidden="true" style={{ fontSize: '3rem', marginBottom: '1rem', display: 'block' }}>{type === 'Google Drive' ? '📂' : '🔗'}</span>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--color-text-secondary)' }}>This resource is a {type}.</p>
                 {sourceUrl ? (
                   <a href={sourceUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '0.75rem 1.5rem', background: 'var(--accent)', color: '#fff', borderRadius: '6px', textDecoration: 'none', fontWeight: 500 }}>
@@ -649,7 +641,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
           {/* ── Resource Metadata ── */}
           <section className="card rd-section rd-source-card" aria-labelledby="rd-source-heading">
             <h2 id="rd-source-heading" className="rd-section-title">
-              <span aria-hidden="true">📁</span> Resource Info
+              <span className="rd-emoji" aria-hidden="true">📁</span> Resource Info
             </h2>
 
             <dl className="rd-source-list">

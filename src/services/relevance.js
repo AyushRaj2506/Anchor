@@ -15,7 +15,7 @@ export function searchKnowledge(queryText, resources = [], tasks = []) {
   // Tokenize query into lowercase keywords
   const queryTokens = queryText
     .toLowerCase()
-    .replace(/[?.!,;]/g, ' ')
+    .replace(/[?.!,;\"\'\(\)\[\]]/g, ' ')
     .split(/\s+/)
     .filter(t => t.length > 2); // Exclude very short words like 'a', 'to', 'in', 'my'
 

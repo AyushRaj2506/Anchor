@@ -215,7 +215,7 @@ function Bookmarks({ resources, onToggleBookmark, onOpenResource, onNavigateToLi
       <section className="bm-list-section" aria-label="Bookmarked resources">
         <h2 className="bm-list-title">Saved Resources ({filteredBookmarks.length})</h2>
 
-        <div className="card bm-list-card">
+        <div className="bm-list-container">
           {bookmarkedList.length === 0 ? (
             /* General Empty State */
             <div className="bm-empty" role="status" aria-live="polite">
