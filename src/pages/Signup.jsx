@@ -286,8 +286,9 @@ function Signup({ onSwitchView, theme, onToggleTheme }) {
 
             {/* Terms checkbox */}
             <div className="auth-field">
-              <label className="auth-checkbox-label">
+              <label htmlFor="signup-terms" className="auth-checkbox-label">
                 <input
+                  id="signup-terms"
                   type="checkbox"
                   className="auth-checkbox"
                   checked={agreeTerms}

@@ -3,8 +3,6 @@
    Inter font + CSS custom properties + global resets + animations
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap');
-
 /* ==========================================================================
    DESIGN TOKENS — LIGHT THEME (default)
    ========================================================================== */
@@ -34,7 +32,7 @@
   /* ── Color: Text ── */
   --color-text-primary:     #22201e;   /* deep warm charcoal */
   --color-text-secondary:   #6b6560;   /* muted body secondary */
-  --color-text-muted:       #9e9891;   /* metadata, placeholders */
+  --color-text-muted:       #736e68;   /* metadata, placeholders */
   --color-text-inverse:     #f0ebe4;
 
   /* ── Color: Borders ── */
@@ -155,7 +153,7 @@
   /* ── Text ── */
   --color-text-primary:     #f5f7f2;   /* primary text */
   --color-text-secondary:   #b7c2b8;   /* secondary text */
-  --color-text-muted:       #89968b;   /* muted text */
+  --color-text-muted:       #9da89f;   /* muted text */
 
   /* ── Borders ── */
   --color-border:           rgba(255,255,255,0.10);
@@ -485,3 +483,4 @@ select {
   background-color: var(--color-input-bg);
   color: var(--color-text-primary);
 }
+::placeholder { color: var(--color-text-muted); opacity: 1; }

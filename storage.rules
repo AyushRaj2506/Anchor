@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Craft rules based on the provided project structure and security requirements
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Only allow access if the user is authenticated and is accessing their own folder
+    match /{userId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow write if authenticated, uploading to their own folder, and file is <= 50MB
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 50 * 1024 * 1024;
+    }
+  }
+}

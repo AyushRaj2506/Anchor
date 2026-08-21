@@ -62,4 +62,15 @@ const localApiPlugin = () => ({
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), localApiPlugin()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/__tests__/setup.js'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/**/*.test.{js,jsx}', 'src/main.jsx'],
+    },
+  },
 })

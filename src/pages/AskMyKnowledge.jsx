@@ -106,15 +106,6 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
     const hasResources = context.resources && context.resources.length > 0;
     const hasTasks     = context.tasks     && context.tasks.length     > 0;
 
-    console.log("[ANCHOR DEBUG] Question:", trimmed);
-    console.log("[ANCHOR DEBUG] Current user:", user);
-    console.log("[ANCHOR DEBUG] User UID:", user?.uid || user?.id);
-    console.log("[ANCHOR DEBUG] Resources fetched:", resources);
-    console.log("[ANCHOR DEBUG] Resource count:", resources?.length);
-    console.log("[ANCHOR DEBUG] Matching resources:", context.resources);
-    console.log("[ANCHOR DEBUG] Knowledge sent to Gemini:", context);
-    console.log("[ANCHOR DEBUG] Gemini request started");
-
     // Short-circuit: no relevant context found locally
     if (!hasResources && !hasTasks) {
       setTimeout(() => {
@@ -165,11 +156,8 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
         notFound: response.notFound,
       }]);
 
-      console.log("[ANCHOR DEBUG] Gemini response:", response);
-
     } catch (err) {
       clearTimeout(loadingTimer);
-      console.error("[ANCHOR DEBUG] ERROR:", err);
       setIsTyping(false);
       setMessages(prev => [...prev, {
         id:      'a-' + Date.now(),

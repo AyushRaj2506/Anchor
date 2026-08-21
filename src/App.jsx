@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import Dashboard from './pages/Dashboard';
-import Library from './pages/Library';
-import Tasks from './pages/Tasks';
-import ResourceDetails from './pages/ResourceDetails';
-import Bookmarks from './pages/Bookmarks';
-import AskMyKnowledge from './pages/AskMyKnowledge';
-import AITest from './pages/AITest';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import DemoAccount from './pages/DemoAccount';
+
+// Code-split pages for performance
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Library = lazy(() => import('./pages/Library'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const ResourceDetails = lazy(() => import('./pages/ResourceDetails'));
+const Bookmarks = lazy(() => import('./pages/Bookmarks'));
+const AskMyKnowledge = lazy(() => import('./pages/AskMyKnowledge'));
+const Login = lazy(() => import('./pages/Login'));
+const Signup = lazy(() => import('./pages/Signup'));
+const DemoAccount = lazy(() => import('./pages/DemoAccount'));
 import { LIBRARY_RESOURCES } from './data/libraryData';
 import { TASKS } from './data/taskData';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -489,8 +490,6 @@ function App() {
             onDeleteResource={handleDeleteResource}
           />
         );
-      case 'ai-test':
-        return <AITest />;
       case 'resource-details':
         if (!selectedResource) {
           return (
@@ -537,31 +536,35 @@ function App() {
   }
 
   if (!user) {
-    if (authView === 'signup') {
-      return (
-        <Signup
-          onSwitchView={setAuthView}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-        />
-      );
-    }
-    if (authView === 'demo') {
-      return (
-        <DemoAccount
-          onDemoLogin={handleDemoLogin}
-          onSwitchView={setAuthView}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-        />
-      );
-    }
     return (
-      <Login
-        onSwitchView={setAuthView}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-      />
+      <Suspense fallback={
+        <div className="auth-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+          Loading...
+        </div>
+      }>
+        {authView === 'signup' && (
+          <Signup
+            onSwitchView={setAuthView}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        )}
+        {authView === 'demo' && (
+          <DemoAccount
+            onDemoLogin={handleDemoLogin}
+            onSwitchView={setAuthView}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        )}
+        {authView === 'login' && (
+          <Login
+            onSwitchView={setAuthView}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        )}
+      </Suspense>
     );
   }
 
@@ -594,9 +597,15 @@ function App() {
           onNavigate={handleNavigate}
         />
         <div className="app-content">
-          <div key={activePage} className="page-enter">
-            {renderPage()}
-          </div>
+          <Suspense fallback={
+            <div style={{ display: 'flex', padding: '2rem', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+              Loading page...
+            </div>
+          }>
+            <div key={activePage} className="page-enter">
+              {renderPage()}
+            </div>
+          </Suspense>
         </div>
       </div>
     </div>
