@@ -295,10 +295,23 @@
   display: none;
 }
 
+.sidebar-close-btn { display: none; }
+
 /* ===========================
    RESPONSIVE — tablet / mobile
    =========================== */
 @media (max-width: 768px) {
+  .sidebar-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-sidebar-text-active);
+    cursor: pointer;
+  }
   .sidebar {
     position: fixed;
     left: 0;

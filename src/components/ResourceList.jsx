@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bookmark, MoreHorizontal } from 'lucide-react';
+import { Bookmark } from 'lucide-react';
 import './ResourceList.css';
 
 /**
@@ -13,7 +13,7 @@ import './ResourceList.css';
  * Shows the 5 most recent resources (first 5 from the array, which is already sorted
  * newest-first by the Firestore query). If there are no resources, shows an empty state.
  */
-function ResourceList({ resources = [], onNavigate, onToggleBookmark }) {
+function ResourceList({ resources = [], onNavigate, onToggleBookmark, onOpenResource }) {
   const [poppingId, setPoppingId] = useState(null);
 
   // Show up to 5 most recent resources (array is already newest-first from Firestore)
@@ -72,7 +72,7 @@ function ResourceList({ resources = [], onNavigate, onToggleBookmark }) {
 
                 {/* Title + category */}
                 <div className="resource-info">
-                  <span className="resource-title">{resource.title}</span>
+                  <button className="resource-title resource-title-button" onClick={() => onOpenResource?.(resource)} aria-label={`Open ${resource.title}`}>{resource.title}</button>
                   <span className="resource-meta">
                     {resource.category || 'Uncategorized'} &bull; {resource.type || 'Document'}
                   </span>

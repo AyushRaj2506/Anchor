@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './ResourceDetails.css';
-import { analyzeResource, analyzeResourceFile } from '../services/ai';
+import { safeWebUrl } from '../utils/url';
+import { analyzeResource, analyzeResourceFile, analyzeUrlResource } from '../services/ai';
 import { auth } from '../config/firebase';
 import { getDownloadUrl } from '../services/storage';
 
@@ -21,7 +22,7 @@ import { getDownloadUrl } from '../services/storage';
  *   - Action items are local UI state only (future milestone for persistence)
  *   - Document preview is a styled CSS placeholder — no PDF library in scope
  */
-function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource, onUpdateResource, onCreateTasksFromAnalysis, onNavigate }) {
+function ResourceDetails({ user, resource, onBack, onToggleBookmark, onDeleteResource, onUpdateResource, onCreateTasksFromAnalysis }) {
   const {
     id,
     title,
@@ -30,7 +31,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
     typeIcon,
     iconBg,
     bookmarked,
-    sourceUrl,
+    sourceUrl: rawSourceUrl,
     description,
     notes,
     createdAt,
@@ -44,6 +45,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
     aiAnalyzedAt,
   } = resource;
 
+  const sourceUrl = safeWebUrl(rawSourceUrl || resource.url);
   // Bookmark pop animation
   const [bookmarkPopping, setBookmarkPopping] = useState(false);
 
@@ -54,11 +56,17 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
 
   // Signed URL state
   const [signedUrl, setSignedUrl] = useState(null);
+  const [previewError, setPreviewError] = useState('');
+  const [previewRetry, setPreviewRetry] = useState(0);
+  const [downloading, setDownloading] = useState(false);
 
   // Fetch signed download URL if resource is saved in Supabase
   useEffect(() => {
-    const isDemo = JSON.parse(localStorage.getItem('anchor-user') || '{}').isDemo;
-    if (resource.storagePath && !isDemo && auth.currentUser) {
+    const isDemo = user?.isDemo === true;
+    setSignedUrl(null);
+    setPreviewError('');
+    if (isDemo && resource.storagePath) setPreviewError('Sample files are not available for download in demo mode.');
+    if (resource.storagePath && !isDemo && auth?.currentUser) {
       let active = true;
       async function fetchSignedUrl() {
         try {
@@ -69,19 +77,22 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
           }
         } catch (err) {
           console.error('Failed to fetch signed download URL:', err);
+          if (active) setPreviewError('Could not load this file. Please try again.');
         }
       }
       fetchSignedUrl();
       return () => { active = false; };
     }
-  }, [resource.storagePath]);
+  }, [resource.storagePath, previewRetry, user?.isDemo]);
 
   async function handleAnalyze() {
+    if (analyzing) return;
+    if (user?.isDemo || !auth?.currentUser) { setAiError('Sign in to your account to analyze resources with AI.'); return; }
     setAnalyzing(true);
     setAiError(null);
     setTaskNotification(null);
 
-    const isDemo = JSON.parse(localStorage.getItem('anchor-user') || '{}').isDemo;
+    const isDemo = user?.isDemo === true;
     const hasRealFile = resource.storagePath && !isDemo && auth.currentUser;
 
     try {
@@ -102,9 +113,10 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
           },
           idToken
         );
+      } else if (type === 'URL' || type === 'Google Drive') {
+        result = await analyzeUrlResource(resource, await auth.currentUser.getIdToken());
       } else {
-        // Demo mode or non-file resource: fall back to metadata-based analysis
-        result = await analyzeResource(resource);
+        result = await analyzeResource(resource, await auth.currentUser.getIdToken());
       }
 
       // Persist AI results to Firestore
@@ -157,7 +169,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
       if (err.message === 'FIRESTORE_SAVE_FAILED') {
         setAiError('AI analysis completed, but it could not be saved. Please try again.');
       } else {
-        setAiError('AI analysis is temporarily unavailable. Your resource was not affected.');
+        setAiError(err.message || 'AI analysis is temporarily unavailable. Please try again.');
       }
     } finally {
       setAnalyzing(false);
@@ -511,6 +523,9 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
               )}
             </div>
 
+            {previewError && <div role="alert" className="app-error">{previewError}
+              {!user?.isDemo && <button onClick={() => setPreviewRetry(value => value + 1)}>Retry preview</button>}
+            </div>}
             {/* Display private Image, PDF details, or default styled mock markup */}
             {resource.storagePath && type === 'Image' ? (
               <div className="rd-preview-area rd-preview-image">
@@ -521,7 +536,7 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
                     style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '4px' }}
                   />
                 ) : (
-                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading image...</div>
+                  <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>{previewError ? 'Image preview unavailable.' : 'Loading image...'}</div>
                 )}
               </div>
             ) : resource.storagePath && type === 'PDF' ? (
@@ -534,7 +549,9 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
                 </div>
                 <div className="rd-pdf-actions">
                   <a
-                    href={signedUrl || '#'}
+                    href={signedUrl || undefined}
+                    aria-disabled={!signedUrl}
+                    tabIndex={signedUrl ? 0 : -1}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`rd-pdf-btn rd-pdf-btn-primary ${!signedUrl ? 'disabled' : ''}`}
@@ -542,26 +559,32 @@ function ResourceDetails({ resource, onBack, onToggleBookmark, onDeleteResource,
                     Open PDF
                   </a>
                   <button
-                    onClick={() => {
-                      if (signedUrl) {
-                        const a = document.createElement('a');
-                        a.href = signedUrl;
-                        a.download = resource.fileName || `${title}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                      }
+                    onClick={async () => {
+                      if (!auth?.currentUser || downloading) return;
+                      setDownloading(true);
+                      try {
+                        const token = await auth.currentUser.getIdToken();
+                        const url = await getDownloadUrl(resource.storagePath, token, true);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = resource.fileName || title + '.pdf';
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                      } catch {
+                        setPreviewError('Could not download this file. Please try again.');
+                      } finally { setDownloading(false); }
                     }}
                     className="rd-pdf-btn rd-pdf-btn-secondary"
-                    disabled={!signedUrl}
+                    disabled={!signedUrl || downloading}
                   >
-                    Download
+                    {downloading ? 'Preparing...' : 'Download'}
                   </button>
                 </div>
               </div>
             ) : (type === 'Note' || type === 'Document') ? (
-              <div className="rd-preview-area rd-preview-text" style={{ padding: '1.5rem', background: '#fff', borderRadius: '8px', border: '1px solid var(--border)', maxHeight: '600px', overflowY: 'auto' }}>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: '#111', lineHeight: 1.6 }}>
+              <div className="rd-preview-area rd-preview-text" style={{ padding: '1.5rem', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border)', maxHeight: '600px', overflowY: 'auto' }}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '0.9rem', color: 'var(--text-primary)', lineHeight: 1.6 }}>
                   {resource.content || 'No content provided.'}
                 </pre>
               </div>

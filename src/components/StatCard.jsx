@@ -3,7 +3,7 @@ import './StatCard.css';
 
 /**
  * useCountUp — animates a number from 0 to `target` over `duration` ms.
- * Only runs once on mount. Respects prefers-reduced-motion.
+ * Updates when the value changes. Respects prefers-reduced-motion.
  */
 function useCountUp(target, duration = 600) {
   const [count, setCount] = useState(0);
@@ -11,6 +11,7 @@ function useCountUp(target, duration = 600) {
   const startRef = useRef(null);
 
   useEffect(() => {
+    startRef.current = null;
     // Skip animation if reduced motion is preferred
     const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (prefersReduced || typeof target !== 'number') {
@@ -37,7 +38,7 @@ function useCountUp(target, duration = 600) {
 
     rafRef.current = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafRef.current);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [target, duration]);
 
   return typeof target === 'number' ? count : target;
 }

@@ -9,7 +9,7 @@ function getRemaining(deadlineMs) {
   const now = Date.now();
   const diff = deadlineMs - now;
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-  if (days < 0) return 'Overdue';
+  if (diff < 0) return 'Overdue';
   if (days === 0) return 'Today';
   if (days === 1) return 'Tomorrow';
   return `${days} days left`;
@@ -50,7 +50,7 @@ function DeadlineList({ tasks = [], onNavigate }) {
   return (
     <div className="card deadline-card">
       <div className="card-header">
-        <h2 className="card-title">Upcoming Deadlines</h2>
+        <h2 className="card-title">Active Deadlines</h2>
         <button
           className="view-all-btn"
           aria-label="View all tasks and deadlines"
@@ -60,11 +60,11 @@ function DeadlineList({ tasks = [], onNavigate }) {
         </button>
       </div>
 
-      <ul className="deadline-list" role="list" aria-label="Upcoming deadlines">
+      <ul className="deadline-list" role="list" aria-label="Active deadlines">
         {upcoming.length === 0 ? (
-           <p style={{ color: 'var(--text-secondary)', padding: '1rem', textAlign: 'center' }}>No upcoming deadlines.</p>
+           <li style={{ color: 'var(--text-secondary)', padding: '1rem', textAlign: 'center' }}>No upcoming deadlines.</li>
         ) : upcoming.map((d) => {
-          const badge = PRIORITY_BADGE[d.priority];
+          const badge = PRIORITY_BADGE[d.priority] || PRIORITY_BADGE.low;
           return (
             <li key={d.id} className="deadline-item">
               {/* Date block */}

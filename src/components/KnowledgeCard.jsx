@@ -22,7 +22,7 @@ function KnowledgeCard({ resources = [], tasks = [] }) {
 
   const tasksCompletedThisWeek = tasks.filter(t => {
     if (t.status !== 'completed') return false;
-    const timeField = t.updatedAt || t.createdAt;
+    const timeField = t.completedAtMs || (typeof t.completedOn === 'string' && /\b\d{4}\b/.test(t.completedOn) ? t.completedOn : null);
     if (!timeField) return false;
     let timeMs = timeField.toMillis ? timeField.toMillis() : new Date(timeField).getTime();
     return timeMs >= startOfWeek;

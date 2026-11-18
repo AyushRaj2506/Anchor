@@ -4,6 +4,7 @@ import TaskFilters from '../components/TaskFilters';
 import TaskCard from '../components/TaskCard';
 import { KANBAN_COLUMNS, TASK_CATEGORIES, TASK_PRIORITIES } from '../data/taskData';
 import './Tasks.css';
+import { useDialog } from '../utils/useDialog';
 
 /**
  * Tasks page — shows a Kanban board with To Do / In Progress / Completed columns.
@@ -23,8 +24,8 @@ import './Tasks.css';
  * KANBAN_COLUMNS, TASK_CATEGORIES, TASK_PRIORITIES from taskData are static
  * UI configuration — they are NOT mock task records and are kept intentionally.
  */
-function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask }) {
-  const [search, setSearch]       = useState('');
+function Tasks({ initialSearch = '', tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask }) {
+  const [search, setSearch]       = useState(initialSearch);
   const [category, setCategory]   = useState('all');
   const [priority, setPriority]   = useState('all');
   const [status, setStatus]       = useState('all');
@@ -37,7 +38,7 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
     let result = (tasks || []).filter((task) => {
       // Search: title or category
       if (q) {
-        const inTitle    = task.title.toLowerCase().includes(q);
+        const inTitle    = (task.title || '').toLowerCase().includes(q);
         const inCategory = (task.category || '').toLowerCase().includes(q);
         if (!inTitle && !inCategory) return false;
       }
@@ -80,27 +81,43 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
   const [newCategory, setNewCategory]   = useState('Personal');
   const [newPriority, setNewPriority]   = useState('Medium');
   const [newDeadline, setNewDeadline]   = useState('');
+  const [newStatus, setNewStatus] = useState('todo');
+  function openAddModal(status = 'todo') { setNewStatus(status); setShowAddModal(true); }
 
-  function handleAddSubmit() {
-    if (!newTitle.trim()) return;
-    if (onAddTask) {
-      onAddTask({
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const dialogRef = useDialog(showAddModal, () => setShowAddModal(false), saving);
+  async function handleAddSubmit() {
+    if (!newTitle.trim() || saving || !onAddTask) return;
+    if (newDeadline && !Number.isFinite(new Date(newDeadline).getTime())) {
+      setSaveError('Please enter a valid deadline.');
+      return;
+    }
+    setSaving(true);
+    setSaveError('');
+    try {
+      await onAddTask({
         title:      newTitle.trim(),
         category:   newCategory,
         priority:   newPriority,
-        status:     'todo',
+        status:     newStatus,
+        ...(newStatus === 'completed' ? { completedAtMs: Date.now(), completedOn: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) } : {}),
         deadline:   newDeadline
           ? new Date(newDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
           : 'No deadline',
         deadlineMs: newDeadline ? new Date(newDeadline).getTime() : null,
         bookmarked: false,
       });
-    }
     setShowAddModal(false);
     setNewTitle('');
     setNewCategory('Personal');
     setNewPriority('Medium');
     setNewDeadline('');
+    } catch {
+      setSaveError('Could not save the task. Your input is kept; please try again.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const hasNoTasks      = !loading && (tasks || []).length === 0;
@@ -118,7 +135,8 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
         <button
           className="tasks-add-btn"
           aria-label="Add a new task"
-          onClick={() => setShowAddModal(true)}
+          disabled={loading}
+          onClick={() => openAddModal()}
         >
           + Add Task
         </button>
@@ -148,6 +166,7 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
       <TaskFilters
         search={search}       onSearch={setSearch}
         category={category}   onCategory={setCategory}
+        categories={[...new Set((tasks || []).map(t => t.category).filter(Boolean))]}
         priority={priority}   onPriority={setPriority}
         status={status}       onStatus={setStatus}
         sort={sort}           onSort={setSort}
@@ -180,7 +199,7 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
               Add your first task using the button above.
             </p>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => openAddModal()}
               style={{ padding: '0.5rem 1.25rem', borderRadius: '6px', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: '0.875rem' }}
             >
               + Add Task
@@ -251,7 +270,7 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
                 <button
                   className="kanban-add-btn"
                   aria-label={`Add a new task to ${col.label}`}
-                  onClick={() => setShowAddModal(true)}
+                  onClick={() => openAddModal(col.id)}
                 >
                   + Add Task
                 </button>
@@ -264,8 +283,9 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
       {/* ── Add Task Modal ── */}
       {showAddModal && (
         <div
+          ref={dialogRef}
           className="task-modal-overlay"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget && !saving) setShowAddModal(false); }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-task-dialog-title"
@@ -280,6 +300,7 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
               </div>
               <button 
                 className="task-modal-close" 
+                disabled={saving}
                 onClick={() => setShowAddModal(false)}
                 aria-label="Close modal"
               >
@@ -294,13 +315,14 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
                 <label className="task-modal-label" htmlFor="add-task-title">Title *</label>
                 <input
                   id="add-task-title"
+                  maxLength={500}
                   type="text"
                   className="task-modal-input"
                   placeholder="Task title..."
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
                   autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') handleAddSubmit(); if (e.key === 'Escape') setShowAddModal(false); }}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddSubmit(); if (e.key === 'Escape' && !saving) setShowAddModal(false); }}
                 />
               </div>
 
@@ -345,6 +367,7 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
 
             </div>
 
+            {saveError && <p role="alert" className="app-error">{saveError}</p>}
             {/* Modal Footer */}
             <div className="task-modal-footer">
               <button
@@ -356,9 +379,9 @@ function Tasks({ tasks, loading, error, onAddTask, onUpdateTask, onDeleteTask })
               <button
                 className="task-btn-submit"
                 onClick={handleAddSubmit}
-                disabled={!newTitle.trim()}
+                disabled={!newTitle.trim() || saving}
               >
-                Add Task
+                {saving ? 'Saving...' : 'Add Task'}
               </button>
             </div>
             

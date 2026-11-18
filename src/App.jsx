@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 
@@ -16,10 +16,12 @@ import { LIBRARY_RESOURCES } from './data/libraryData';
 import { TASKS } from './data/taskData';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './config/firebase';
-import { getResources, addResource, updateResource, deleteResource, getTasks, addTask, updateTask, deleteTask } from './services/firestore';
-import { serverTimestamp } from 'firebase/firestore';
+import { getResources, addResource, updateResource, deleteResource, getTasks, addTask, updateTask, deleteTask, addAnalysisTask } from './services/firestore';
+import { serverTimestamp } from 'firebase/firestore/lite';
 import { deleteFile } from './services/storage';
 import './App.css';
+import { readJSON, writeJSON } from './utils/persistence';
+import { parseTaskDeadline, taskTitleKey } from './utils/tasks';
 
 /**
  * App — root component.
@@ -39,22 +41,21 @@ import './App.css';
 function App() {
   // ── Authentication State Persistence ──
   const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('anchor-user');
-    return saved ? JSON.parse(saved) : null;
+    const saved = readJSON('anchor-user');
+    return saved?.isDemo === true ? saved : null;
   });
 
   // ── Theme State Persistence ──
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('anchor-theme');
-    return saved || 'light';
+    try { return localStorage.getItem('anchor-theme') === 'dark' ? 'dark' : 'light'; }
+    catch { return 'light'; }
   });
 
   const [authView, setAuthView]               = useState('login');
   const [activePage, setActivePage]           = useState('dashboard');
   const [sidebarOpen, setSidebarOpen]         = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    const saved = localStorage.getItem('anchor-sidebar-collapsed');
-    return saved ? JSON.parse(saved) : false;
+    return readJSON('anchor-sidebar-collapsed', false) === true;
   });
   const [selectedResource, setSelectedResource] = useState(null);
   const [resources, setResources]             = useState([]);
@@ -64,32 +65,55 @@ function App() {
   const [loadingTasks, setLoadingTasks]       = useState(false);
   const [taskError, setTaskError]             = useState(null);
   const [loadingAuth, setLoadingAuth]         = useState(true);
+  const [operationError, setOperationError] = useState('');
+  const [pageSearch, setPageSearch] = useState('');
+  const sessionRef = useRef(null);
+  const taskCreationLocks = useRef(new Set());
+  const uid = user?.uid;
+  const isDemo = user?.isDemo === true;
+  const sessionKey = user?.isDemo ? 'demo' : user?.uid || null;
+  sessionRef.current = sessionKey;
+  const resourcesRef = useRef(resources);
+  resourcesRef.current = resources;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+  useEffect(() => {
+    setActivePage('dashboard');
+    setSelectedResource(null);
+    setSidebarOpen(false);
+    setOperationError('');
+    setPageSearch('');
+    taskCreationLocks.current.clear();
+  }, [sessionKey]);
 
   // ── Firebase Auth Listener ──
   useEffect(() => {
+    if (!auth) { setLoadingAuth(false); return; }
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      const savedDemo = readJSON('anchor-user');
+      const nextSession = firebaseUser?.uid || (savedDemo?.isDemo === true ? 'demo' : null);
+      if (nextSession !== sessionRef.current) {
+        setResources([]);
+        setTasks([]);
+        setSelectedResource(null);
+        setActivePage('dashboard');
+      }
       if (firebaseUser) {
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          name: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
           isDemo: false
         });
       } else {
-        // Fallback to demo user if present
-        const saved = localStorage.getItem('anchor-user');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.isDemo) {
-            setUser(parsed);
-          } else {
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-        }
+        const saved = readJSON('anchor-user');
+        setUser(saved?.isDemo === true ? saved : null);
       }
       setLoadingAuth(false);
+    }, () => {
+      setLoadingAuth(false);
+      setUser(null);
+      setOperationError('Could not restore your session. Please sign in again.');
     });
 
     return () => unsubscribe();
@@ -98,80 +122,90 @@ function App() {
   // Apply Theme attribute dynamically on document root
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('anchor-theme', theme);
+    try { localStorage.setItem('anchor-theme', theme); } catch { /* Storage can be disabled. */ }
   }, [theme]);
 
   // Persist Sidebar Collapsed state
   useEffect(() => {
-    localStorage.setItem('anchor-sidebar-collapsed', JSON.stringify(sidebarCollapsed));
+    writeJSON('anchor-sidebar-collapsed', sidebarCollapsed);
   }, [sidebarCollapsed]);
 
   // ── Firestore Resources Synchronization ──
   useEffect(() => {
-    if (!user) {
+    if (!uid && !isDemo) {
       setResources([]);
       setResourceError(null);
       return;
     }
 
-    if (user.isDemo) {
+    if (isDemo) {
       setResources(LIBRARY_RESOURCES);
       setResourceError(null);
+      setLoadingResources(false);
       return;
     }
 
+    let active = true;
+    setResources([]);
     async function loadFirestoreResources() {
       setLoadingResources(true);
       setResourceError(null);
       try {
-        const data = await getResources(user.uid);
-        setResources(data);
+        const data = await getResources(uid);
+        if (active) setResources(data);
       } catch (err) {
+        if (!active) return;
         console.error('Failed to load resources:', err);
         // Do NOT fall back to mock data for real users.
         // Show an empty list with an error message instead.
         setResources([]);
         setResourceError('Could not load your resources. Please check your connection and try again.');
       } finally {
-        setLoadingResources(false);
+        if (active) setLoadingResources(false);
       }
     }
 
     loadFirestoreResources();
-  }, [user]);
+    return () => { active = false; };
+  }, [uid, isDemo]);
 
   // ── Firestore Tasks Synchronization ──
   useEffect(() => {
-    if (!user) {
+    if (!uid && !isDemo) {
       setTasks([]);
       setTaskError(null);
       return;
     }
 
-    if (user.isDemo) {
+    if (isDemo) {
       setTasks(TASKS);
       setTaskError(null);
+      setLoadingTasks(false);
       return;
     }
 
+    let active = true;
+    setTasks([]);
     async function loadFirestoreTasks() {
       setLoadingTasks(true);
       setTaskError(null);
       try {
-        const data = await getTasks(user.uid);
-        setTasks(data);
+        const data = await getTasks(uid);
+        if (active) setTasks(data);
       } catch (err) {
+        if (!active) return;
         console.error('Failed to load tasks:', err);
         // Do NOT fall back to mock data for real users.
         setTasks([]);
         setTaskError('Could not load your tasks. Please check your connection and try again.');
       } finally {
-        setLoadingTasks(false);
+        if (active) setLoadingTasks(false);
       }
     }
 
     loadFirestoreTasks();
-  }, [user]);
+    return () => { active = false; };
+  }, [uid, isDemo]);
 
   function handleToggleTheme() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
@@ -186,20 +220,25 @@ function App() {
       name: 'Demo User',
       isDemo: true,
     };
+    setResources(LIBRARY_RESOURCES);
+    setTasks(TASKS);
     setUser(sessionUser);
-    localStorage.setItem('anchor-user', JSON.stringify(sessionUser));
+    writeJSON('anchor-user', sessionUser);
     setActivePage('dashboard');
   }
 
   async function handleLogout() {
     if (user?.isDemo) {
       setUser(null);
-      localStorage.removeItem('anchor-user');
+      writeJSON('anchor-user', null);
     } else {
       try {
+        writeJSON('anchor-user', null);
         await signOut(auth);
       } catch (err) {
         console.error('Logout failed:', err);
+        setOperationError('Could not log out. Please try again.');
+        return;
       }
     }
     setAuthView('login');
@@ -207,7 +246,9 @@ function App() {
     setSelectedResource(null);
   }
 
-  function handleNavigate(pageId) {
+  function handleNavigate(pageId, search = '') {
+    setPageSearch(search);
+    setOperationError('');
     setActivePage(pageId);
     setSidebarOpen(false);
     // Clear selected resource when navigating away from resource-details
@@ -224,148 +265,94 @@ function App() {
 
   async function handleToggleBookmark(resourceId) {
     const target = resources.find(r => r.id === resourceId);
-    if (!target) return;
-
-    // Optimistic UI update
-    setResources((prev) =>
-      prev.map((r) => (r.id === resourceId ? { ...r, bookmarked: !r.bookmarked } : r))
-    );
-
-    if (user && !user.isDemo) {
-      try {
-        await updateResource(user.uid, resourceId, { bookmarked: !target.bookmarked });
-      } catch (err) {
-        console.error('Failed to update bookmark in Firestore:', err);
-        // Revert on failure
-        setResources((prev) =>
-          prev.map((r) => (r.id === resourceId ? { ...r, bookmarked: target.bookmarked } : r))
-        );
-        alert('Failed to update bookmark. Please try again.');
+    if (!target || !user) return;
+    const owner = sessionKey;
+    try {
+      if (!user.isDemo) await updateResource(user.uid, resourceId, { bookmarked: !target.bookmarked });
+      if (sessionRef.current === owner) {
+        setResources(prev => prev.map(r => r.id === resourceId ? { ...r, bookmarked: !target.bookmarked } : r));
       }
+    } catch {
+      if (sessionRef.current === owner) setOperationError('Could not update the bookmark. Please try again.');
     }
   }
 
   async function handleAddResource(newResource, resourceId = null) {
-    if (user && !user.isDemo) {
-      try {
-        const id = await addResource(user.uid, newResource, resourceId);
-        setResources(prev => [{ id, ...newResource, createdAt: new Date() }, ...prev]);
-        return id;
-      } catch (err) {
-        console.error('Failed to add resource:', err);
-        alert('Failed to add resource. Please try again.');
-        throw err;
-      }
-    } else {
-      // Demo mode — local only
-      const id = resourceId || Date.now().toString();
-      setResources(prev => [{ id, ...newResource, createdAt: new Date() }, ...prev]);
-      return id;
+    if (!user || sessionRef.current !== sessionKey) throw new Error('Please sign in again.');
+    const owner = sessionKey;
+    const id = user.isDemo ? resourceId || crypto.randomUUID() : await addResource(user.uid, newResource, resourceId);
+    if (sessionRef.current === owner) {
+      setResources(prev => [{ ...newResource, id, createdAt: new Date() }, ...prev]);
     }
+    return id;
   }
 
   async function handleUpdateResource(resourceId, updates) {
-    let enrichedUpdates = { ...updates };
-    let localUpdates = { ...updates };
-
-    // If updates contain AI fields, add the analysis timestamp
+    if (!user || sessionRef.current !== sessionKey || !resourcesRef.current.some(r => r.id === resourceId)) throw new Error('Resource is no longer available.');
+    const owner = sessionKey;
+    const saved = { ...updates };
+    const local = { ...updates };
     if (updates.aiSummary !== undefined) {
-      enrichedUpdates.aiAnalyzedAt = serverTimestamp();
-      localUpdates.aiAnalyzedAt = new Date();
+      saved.aiAnalyzedAt = serverTimestamp();
+      local.aiAnalyzedAt = new Date();
     }
-
-    // Optimistic UI update
-    setResources(prev => prev.map(r => r.id === resourceId ? { ...r, ...localUpdates } : r));
-
-    if (user && !user.isDemo) {
-      try {
-        await updateResource(user.uid, resourceId, enrichedUpdates);
-      } catch (err) {
-        console.error('Failed to update resource in Firestore:', err);
-        throw err; // Propagate error so Caller can revert UI or show warning
-      }
+    if (!user.isDemo) await updateResource(user.uid, resourceId, saved);
+    if (sessionRef.current === owner) {
+      setResources(prev => prev.map(r => r.id === resourceId ? { ...r, ...local } : r));
     }
   }
 
   async function handleDeleteResource(resourceId) {
-    const targetResource = resources.find(r => r.id === resourceId);
-
-    if (user && !user.isDemo) {
-      try {
-        // If the resource has a Supabase file, delete it first
-        if (targetResource && targetResource.storagePath) {
-          try {
-            const idToken = await auth.currentUser.getIdToken();
-            await deleteFile(targetResource.storagePath, idToken);
-            console.log('Successfully deleted associated Supabase storage file:', targetResource.storagePath);
-          } catch (storageErr) {
-            console.error('Failed to delete Supabase file:', storageErr);
-            alert(`Failed to delete the associated storage file. Deletion halted to prevent orphaned data. Details: ${storageErr.message}`);
-            return; // HALT deletion if Supabase delete fails
-          }
+    const target = resources.find(r => r.id === resourceId);
+    if (!target || !user) return;
+    const owner = sessionKey;
+    try {
+      if (!user.isDemo) {
+        if (target.storagePath) {
+          const token = await auth.currentUser.getIdToken();
+          await deleteFile(target.storagePath, token);
         }
-
-        // Delete from Firestore
         await deleteResource(user.uid, resourceId);
-        setResources(prev => prev.filter(r => r.id !== resourceId));
-        // If currently viewing this resource, go back to Library
-        if (selectedResource?.id === resourceId) {
-          handleNavigate('library');
-        }
-      } catch (err) {
-        console.error('Failed to delete resource from database:', err);
-        alert('Failed to delete resource from database. Please try again.');
       }
-    } else {
-      // Demo mode or mock only
+      if (sessionRef.current !== owner) return;
       setResources(prev => prev.filter(r => r.id !== resourceId));
-      if (selectedResource?.id === resourceId) {
-        handleNavigate('library');
-      }
+      if (selectedResource?.id === resourceId) handleNavigate('library');
+    } catch {
+      if (sessionRef.current === owner) setOperationError('Could not delete the resource. Please try again.');
     }
   }
 
-  // ── Task Handlers ──
   async function handleAddTask(newTask) {
-    if (user && !user.isDemo) {
-      try {
-        const id = await addTask(user.uid, newTask);
-        setTasks(prev => [{ id, ...newTask, createdAt: new Date() }, ...prev]);
-      } catch (err) {
-        console.error('Failed to add task:', err);
-        alert('Failed to add task. Please try again.');
-      }
-    } else {
-      const id = Date.now().toString();
-      setTasks(prev => [{ id, ...newTask, createdAt: new Date() }, ...prev]);
-    }
+    if (!user) throw new Error('Please sign in again.');
+    const owner = sessionKey;
+    const id = user.isDemo ? crypto.randomUUID() : await addTask(user.uid, newTask);
+    if (sessionRef.current === owner) setTasks(prev => [{ ...newTask, id, createdAt: new Date() }, ...prev]);
+    return id;
   }
 
   async function handleUpdateTask(taskId, updates) {
-    // Optimistic UI update
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
-
-    if (user && !user.isDemo) {
-      try {
-        await updateTask(user.uid, taskId, updates);
-      } catch (err) {
-        console.error('Failed to update task:', err);
-        // Revert on failure — re-fetch would be cleaner but expensive
-      }
+    if (!user || sessionRef.current !== sessionKey) return;
+    const owner = sessionKey;
+    const changes = { ...updates };
+    if (updates.status) changes.completedOn = updates.status === 'completed'
+      ? new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    if (updates.status) changes.completedAtMs = updates.status === 'completed' ? Date.now() : null;
+    try {
+      if (!user.isDemo) await updateTask(user.uid, taskId, changes);
+      if (sessionRef.current === owner) setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...changes, updatedAt: new Date() } : t));
+    } catch {
+      if (sessionRef.current === owner) setOperationError('Could not save the task changes. Please try again.');
     }
   }
 
   async function handleDeleteTask(taskId) {
-    if (user && !user.isDemo) {
-      try {
-        await deleteTask(user.uid, taskId);
-        setTasks(prev => prev.filter(t => t.id !== taskId));
-      } catch (err) {
-        console.error('Failed to delete task:', err);
-        alert('Failed to delete task. Please try again.');
-      }
-    } else {
-      setTasks(prev => prev.filter(t => t.id !== taskId));
+    if (!user) return;
+    const owner = sessionKey;
+    try {
+      if (!user.isDemo) await deleteTask(user.uid, taskId);
+      if (sessionRef.current === owner) setTasks(prev => prev.filter(t => t.id !== taskId));
+    } catch {
+      if (sessionRef.current === owner) setOperationError('Could not delete the task. Please try again.');
     }
   }
 
@@ -378,36 +365,27 @@ function App() {
    * @returns {number} count of newly created tasks
    */
   async function handleCreateTasksFromAnalysis(resourceId, actionItems, resourceCategory) {
-    if (!actionItems || actionItems.length === 0) return 0;
+    if (!user || !Array.isArray(actionItems) || actionItems.length === 0) return 0;
     if (user?.isDemo) return 0; // Demo mode: don't persist tasks from AI
 
     // Find tasks already generated from this resource
     const existingSourceTaskIds = new Set(
-      tasks
+      tasksRef.current
         .filter(t => t.sourceResourceId === resourceId)
-        .map(t => t.title.trim().toLowerCase())
+        .map(t => taskTitleKey(t.title))
     );
 
     let created = 0;
     for (const item of actionItems) {
-      if (!item || !item.title) continue;
-      const titleKey = item.title.trim().toLowerCase();
+      if (!item || typeof item.title !== 'string' || !item.title.trim()) continue;
+      if (sessionRef.current !== sessionKey) throw new Error('Your session changed. Please retry.');
+      const titleKey = taskTitleKey(item.title);
       // Skip if an equivalent task already exists for this resource
-      if (existingSourceTaskIds.has(titleKey)) continue;
+      const lockKey = sessionKey + ':' + resourceId + ':' + titleKey;
+      if (existingSourceTaskIds.has(titleKey) || taskCreationLocks.current.has(lockKey)) continue;
+      taskCreationLocks.current.add(lockKey);
 
-      const deadlineMs = item.deadline ? (() => {
-        let dateString = item.deadline;
-        // If the date string does not contain a 4-digit year, append the current year
-        if (!/\d{4}/.test(dateString)) {
-          dateString = `${dateString} ${new Date().getFullYear()}`;
-        }
-        const d = new Date(dateString);
-        return isNaN(d.getTime()) ? null : d.getTime();
-      })() : null;
-
-      const deadlineDisplay = deadlineMs
-        ? new Date(deadlineMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : 'No deadline';
+      const { deadline: deadlineDisplay, deadlineMs } = parseTaskDeadline(item.deadline);
 
       const newTask = {
         title:            item.title.trim(),
@@ -423,11 +401,16 @@ function App() {
       };
 
       try {
-        await handleAddTask(newTask);
-        existingSourceTaskIds.add(titleKey); // Prevent duplicate within same batch
-        created++;
+        const result = await addAnalysisTask(user.uid, resourceId, newTask);
+        if (sessionRef.current === sessionKey) setTasks(prev => prev.some(task => task.id === result.task.id) ? prev : [result.task, ...prev]);
+        existingSourceTaskIds.add(titleKey);
+        if (result.created) created++;
       } catch (err) {
+        taskCreationLocks.current.delete(lockKey);
         console.error('Failed to create auto-generated task:', err);
+        throw new Error('Some action items could not be saved as tasks. Please retry.');
+      } finally {
+        taskCreationLocks.current.delete(lockKey);
       }
     }
     return created;
@@ -442,6 +425,7 @@ function App() {
             resources={resources}
             tasks={tasks}
             user={user}
+            onOpenResource={handleOpenResource}
             onNavigate={handleNavigate}
             onToggleBookmark={handleToggleBookmark}
           />
@@ -449,6 +433,8 @@ function App() {
       case 'library':
         return (
           <Library
+            user={user}
+            initialSearch={pageSearch}
             resources={resources}
             loading={loadingResources}
             error={resourceError}
@@ -463,6 +449,7 @@ function App() {
       case 'tasks':
         return (
           <Tasks
+            initialSearch={pageSearch}
             tasks={tasks}
             loading={loadingTasks}
             error={taskError}
@@ -474,6 +461,7 @@ function App() {
       case 'ask':
         return (
           <AskMyKnowledge
+            user={user}
             resources={resources}
             tasks={tasks}
             onOpenResource={handleOpenResource}
@@ -508,6 +496,8 @@ function App() {
         const currentResource = resources.find(r => r.id === selectedResource.id) || selectedResource;
         return (
           <ResourceDetails
+            key={currentResource.id}
+            user={user}
             resource={currentResource}
             onBack={() => handleNavigate('library')}
             onToggleBookmark={handleToggleBookmark}
@@ -544,6 +534,7 @@ function App() {
       }>
         {authView === 'signup' && (
           <Signup
+            onProfileUpdated={name => setUser(current => current && !current.isDemo ? { ...current, name } : current)}
             onSwitchView={setAuthView}
             theme={theme}
             onToggleTheme={handleToggleTheme}
@@ -586,6 +577,8 @@ function App() {
       {/* Right side: header + scrollable content */}
       <div className="app-body">
         <Header
+          key={sessionKey}
+          sidebarOpen={sidebarOpen}
           onMenuToggle={() => setSidebarOpen((prev) => !prev)}
           activePage={activePage}
           theme={theme}
@@ -597,12 +590,13 @@ function App() {
           onNavigate={handleNavigate}
         />
         <div className="app-content">
+          {operationError && <div role="alert" className="app-error">{operationError}</div>}
           <Suspense fallback={
             <div style={{ display: 'flex', padding: '2rem', justifyContent: 'center', color: 'var(--text-secondary)' }}>
               Loading page...
             </div>
           }>
-            <div key={activePage} className="page-enter">
+            <div key={sessionKey + activePage + pageSearch} className="page-enter">
               {renderPage()}
             </div>
           </Suspense>

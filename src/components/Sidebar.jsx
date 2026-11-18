@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useDialog } from '../utils/useDialog';
 import {
   LayoutDashboard,
   BookOpen,
@@ -8,6 +9,7 @@ import {
   LogOut,
   Anchor,
   PanelLeft,
+  X,
 } from 'lucide-react';
 import { getDisplayName } from '../utils/user';
 import './Sidebar.css';
@@ -22,6 +24,14 @@ const NAV_ITEMS = [
 ];
 
 function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout, collapsed, onToggleCollapse }) {
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 768px)');
+    const update = () => setMobile(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  const drawerRef = useDialog(mobile && isOpen, onClose);
   const isDemo      = user?.isDemo;
   const displayName = getDisplayName(user);
   const displayRole = isDemo ? 'Demo Mode' : 'Student';
@@ -39,11 +49,17 @@ function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout, coll
       )}
 
       <aside
+        id="anchor-navigation"
+        ref={drawerRef}
+        inert={mobile && !isOpen}
+        role={mobile && isOpen ? 'dialog' : undefined}
+        aria-modal={mobile && isOpen ? true : undefined}
         className={`sidebar ${isOpen ? 'sidebar--open' : ''} ${collapsed ? 'sidebar--collapsed' : ''}`}
         aria-label="Main navigation"
       >
         {/* ── Brand ── */}
         <div className="sidebar-brand">
+          <button className="sidebar-close-btn" onClick={onClose} aria-label="Close navigation menu"><X size={18} /></button>
           <div className="sidebar-brand-icon" aria-hidden="true">
             <Anchor size={20} strokeWidth={2.5} />
           </div>

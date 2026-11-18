@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 
-Object.defineProperty(window, 'matchMedia', {
+if (typeof window !== 'undefined') Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query) => ({
     matches: false,
@@ -14,4 +14,4 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
-window.HTMLElement.prototype.scrollIntoView = function() {};
+if (typeof window !== 'undefined') window.HTMLElement.prototype.scrollIntoView = function() {};

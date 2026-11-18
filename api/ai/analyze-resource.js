@@ -1,13 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from '@google/genai';
-import { verifyAuth } from '../utils/auth.js';
-
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { requireAuth } from '../../server/auth.js';
+import { generateAIContent, getAIModel, getThinkingConfig, sendAIError, getStorageClient, withTimeout, parseAIResponse, validateAnalysis } from '../../server/clients.js';
+import { validBody, isOwnedPath } from '../../server/validation.js';
 
 const MAX_CONTENT_TEXT_CHARS = 80000;
 const FILE_SIZE_LIMIT_BYTES  = 20 * 1024 * 1024; // 20 MB inline limit
@@ -30,22 +23,14 @@ const SUPPORTED_MIME_TYPES = new Set([
  * Body: { resourceId, storagePath, fileType, fileName }
  */
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
+  if (!validBody(req, res)) return;
+  const authenticatedUser = await requireAuth(req, res);
+  if (!authenticatedUser) return;
 
-  // ── 1. Authenticate ─────────────────────────────────────────────────
-  let decodedToken;
-  try {
-    decodedToken = await verifyAuth(req);
-  } catch {
-    return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing token.' });
-  }
-
-  const { uid } = decodedToken;
+  const { uid } = authenticatedUser;
 
   // ── 2. Validate input ────────────────────────────────────────────────
-  const { resourceId, storagePath, fileType, fileName } = req.body || {};
+  const { storagePath, fileType } = req.body || {};
 
   if (!storagePath || typeof storagePath !== 'string') {
     return res.status(400).json({ success: false, error: 'storagePath is required.' });
@@ -56,7 +41,7 @@ export default async function handler(req, res) {
   }
 
   // ── 3. Path ownership check ──────────────────────────────────────────
-  if (!storagePath.startsWith(`${uid}/`)) {
+  if (!isOwnedPath(storagePath, uid)) {
     console.warn(`UID ${uid} attempted to analyze unauthorized path: ${storagePath}`);
     return res.status(403).json({ success: false, error: 'Access denied: Unauthorized file path.' });
   }
@@ -73,13 +58,13 @@ export default async function handler(req, res) {
   if (!process.env.GEMINI_API_KEY) {
     return res.status(503).json({ success: false, error: 'AI analysis is temporarily unavailable.' });
   }
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.VITE_SUPABASE_URL) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)) {
     return res.status(503).json({ success: false, error: 'Storage access is temporarily unavailable.' });
   }
 
   try {
     // ── 6. Download file from Supabase ───────────────────────────────
-    const { data: fileData, error: downloadError } = await supabase.storage
+    const { data: fileData, error: downloadError } = await getStorageClient().storage
       .from('anchor-resources')
       .download(storagePath);
 
@@ -151,8 +136,8 @@ Return ONLY valid JSON matching this EXACT schema:
     `.trim();
 
     // ── 10. Call Gemini with inline file data ────────────────────────
-    const fetchPromise = ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+    const fetchPromise = generateAIContent({
+      model: getAIModel(),
       contents: [
         {
           role: 'user',
@@ -168,112 +153,33 @@ Return ONLY valid JSON matching this EXACT schema:
         }
       ],
       config: {
+          httpOptions: { timeout: 90000, retryOptions: { attempts: 1 } },
+          thinkingConfig: getThinkingConfig(),
+          maxOutputTokens: 8192,
         systemInstruction,
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: {
-            summary: { type: 'string', nullable: true },
-            category: { type: 'string', nullable: true },
-            tags: { type: 'array', items: { type: 'string' } },
-            importantInformation: { type: 'array', items: { type: 'string' } },
-            deadlines: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  description: { type: 'string', nullable: true },
-                  deadline: { type: 'string', nullable: true },
-                  sourceText: { type: 'string', nullable: true },
-                },
-                required: ['title']
-              }
-            },
-            actionItems: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  description: { type: 'string', nullable: true },
-                  deadline: { type: 'string', nullable: true },
-                },
-                required: ['title']
-              }
-            },
-            contentText: { type: 'string', nullable: true },
-          },
-          required: ['summary', 'category', 'tags', 'importantInformation', 'deadlines', 'actionItems', 'contentText']
-        },
+
         temperature: 0.1,
       }
     });
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('AI request timed out.')), 55000)
-    );
-
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
+    const response = await withTimeout(fetchPromise, 90000);
 
     // ── 11. Parse response ───────────────────────────────────────────
     let resultJson;
     try {
-      resultJson = JSON.parse(response.text);
+      resultJson = parseAIResponse(response);
     } catch {
-      console.error('Failed to parse Gemini response:', response.text?.substring(0, 500));
       return res.status(502).json({ success: false, error: 'AI returned malformed data. Please try again.' });
     }
 
     // ── 12. Validate and sanitize ────────────────────────────────────
-    let contentText = typeof resultJson.contentText === 'string' ? resultJson.contentText : '';
-    let contentTruncated = false;
-    if (contentText.length > MAX_CONTENT_TEXT_CHARS) {
-      contentText = contentText.substring(0, MAX_CONTENT_TEXT_CHARS);
-      contentTruncated = true;
-    }
-
-    const validatedData = {
-      summary: typeof resultJson.summary === 'string' ? resultJson.summary.trim() : null,
-      category: typeof resultJson.category === 'string' ? resultJson.category.trim() : null,
-      tags: Array.isArray(resultJson.tags)
-        ? resultJson.tags.filter(t => typeof t === 'string').slice(0, 20)
-        : [],
-      importantInformation: Array.isArray(resultJson.importantInformation)
-        ? resultJson.importantInformation.filter(f => typeof f === 'string').slice(0, 30)
-        : [],
-      deadlines: Array.isArray(resultJson.deadlines)
-        ? resultJson.deadlines
-            .filter(d => d && typeof d.title === 'string')
-            .map(d => ({
-              title: d.title,
-              description: d.description || null,
-              deadline: typeof d.deadline === 'string' ? d.deadline : null,
-              sourceText: d.sourceText || null,
-            }))
-            .slice(0, 20)
-        : [],
-      actionItems: Array.isArray(resultJson.actionItems)
-        ? resultJson.actionItems
-            .filter(a => a && typeof a.title === 'string')
-            .map(a => ({
-              title: a.title,
-              description: a.description || null,
-              deadline: typeof a.deadline === 'string' ? a.deadline : null,
-            }))
-            .slice(0, 20)
-        : [],
-      contentText: contentText || null,
-      contentTruncated,
-    };
+    const validatedData = validateAnalysis(resultJson, MAX_CONTENT_TEXT_CHARS);
 
     return res.status(200).json({ success: true, data: validatedData });
 
-  } catch (err) {
-    console.error('analyze-resource error:', err);
-    return res.status(500).json({
-      success: false,
-      error: 'AI document analysis failed. Your resource has been preserved.'
-    });
+  } catch (error) {
+    console.error('AI request failed:', error.status || error.name);
+    return sendAIError(res, error);
   }
 }

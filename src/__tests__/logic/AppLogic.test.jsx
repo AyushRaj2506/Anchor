@@ -1,61 +1,29 @@
-import { describe, it, expect, vi } from 'vitest';
-// We will test the pure logic for deadline extraction and duplicate prevention
-// Since the logic is inside App.jsx and tightly coupled to the component state in the current architecture,
-// we will simulate the core date parsing logic that is used in handleCreateTasksFromAnalysis.
+// @vitest-environment node
+import { describe, it, expect } from 'vitest';
+import { parseTaskDeadline, taskTitleKey, analysisTaskId } from '../../utils/tasks';
 
-describe('Application Core Logic', () => {
-  it('normalizes deadlines and infers the current year for dates without a year', () => {
-    // The logic in App.jsx uses:
-    // let dateString = item.deadline;
-    // if (!/\d{4}/.test(dateString)) dateString = `${dateString} ${new Date().getFullYear()}`;
-    // const d = new Date(dateString);
-    
-    function parseDeadline(deadline) {
-      if (!deadline) return null;
-      let dateString = deadline;
-      if (!/\d{4}/.test(dateString)) {
-        dateString = `${dateString} ${new Date().getFullYear()}`;
-      }
-      const d = new Date(dateString);
-      return isNaN(d.getTime()) ? null : d.getTime();
-    }
-
-    const currentYear = new Date().getFullYear();
-    const resultMs = parseDeadline('September 5');
-    const resultDate = new Date(resultMs);
-    
-    expect(resultDate.getFullYear()).toBe(currentYear);
-    expect(resultDate.getMonth()).toBe(8); // September is 8 (0-indexed)
-    expect(resultDate.getDate()).toBe(5);
+describe('AI task deadline and identity handling', () => {
+  it('preserves yearless deadlines without inventing a calendar year', () => {
+    expect(parseTaskDeadline('September 5')).toEqual({ deadline: 'September 5', deadlineMs: null });
   });
-
-  it('prevents duplicate tasks based on sourceResourceId and title', () => {
-    // The logic in App.jsx:
-    // const existingSourceTaskIds = new Set(tasks.filter(t => t.sourceResourceId === resourceId).map(t => t.title.trim().toLowerCase()));
-    
-    const existingTasks = [
-      { id: '1', title: 'Submit DBMS assignment', sourceResourceId: 'res123' },
-      { id: '2', title: 'Read chapter 4', sourceResourceId: 'res999' }
-    ];
-    
-    const resourceId = 'res123';
-    const actionItems = [
-      { title: 'Submit DBMS assignment' },
-      { title: 'Complete report' }
-    ];
-
-    const existingSourceTaskIds = new Set(
-      existingTasks
-        .filter(t => t.sourceResourceId === resourceId)
-        .map(t => t.title.trim().toLowerCase())
-    );
-
-    const newTasksToCreate = actionItems.filter(item => {
-      const titleKey = item.title.trim().toLowerCase();
-      return !existingSourceTaskIds.has(titleKey);
-    });
-
-    expect(newTasksToCreate.length).toBe(1);
-    expect(newTasksToCreate[0].title).toBe('Complete report');
+  it('uses the end of the local day for ISO date-only deadlines', () => {
+    const parsed = parseTaskDeadline('2026-09-05');
+    const date = new Date(parsed.deadlineMs);
+    expect(date.getFullYear()).toBe(2026);
+    expect(date.getMonth()).toBe(8);
+    expect(date.getDate()).toBe(5);
+    expect(date.getHours()).toBe(23);
+  });
+  it('does not silently roll impossible calendar dates into another month', () => {
+    expect(parseTaskDeadline('2026-02-30').deadlineMs).toBeNull();
+    expect(parseTaskDeadline(null)).toEqual({ deadline: 'No deadline', deadlineMs: null });
+  });
+  it('normalizes spacing and case for task deduplication', () => {
+    expect(taskTitleKey('  Submit   Report ')).toBe('submit report');
+  });
+  it('creates stable IDs across retries while keeping different resources separate', async () => {
+    const first = await analysisTaskId('resource-a', 'Submit report');
+    expect(await analysisTaskId('resource-a', ' submit   REPORT ')).toBe(first);
+    expect(await analysisTaskId('resource-b', 'Submit report')).not.toBe(first);
   });
 });

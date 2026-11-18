@@ -8,7 +8,7 @@ import './Bookmarks.css';
  * Allows searching, filtering, and toggling bookmark status locally.
  * Also supports opening the Resource Details page.
  */
-function Bookmarks({ resources, onToggleBookmark, onOpenResource, onNavigateToLibrary }) {
+function Bookmarks({ resources = [], onDeleteResource, onToggleBookmark, onOpenResource, onNavigateToLibrary }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [type, setType] = useState('all');
@@ -23,7 +23,7 @@ function Bookmarks({ resources, onToggleBookmark, onOpenResource, onNavigateToLi
   const stats = useMemo(() => {
     const total = bookmarkedList.length;
     const docs = bookmarkedList.filter(r => r.type === 'PDF' || r.type === 'Note' || r.type === 'Document').length;
-    const links = bookmarkedList.filter(r => r.type === 'URL').length;
+    const links = bookmarkedList.filter(r => (r.type === 'URL' || r.type === 'Google Drive')).length;
     const images = bookmarkedList.filter(r => r.type === 'Image').length;
 
     return [
@@ -73,9 +73,9 @@ function Bookmarks({ resources, onToggleBookmark, onOpenResource, onNavigateToLi
     let list = bookmarkedList.filter((r) => {
       // Search matches title or category
       if (q) {
-        const inTitle = r.title.toLowerCase().includes(q);
-        const inCategory = r.category.toLowerCase().includes(q);
-        const inTags = r.tags && r.tags.some(t => t.toLowerCase().includes(q));
+        const inTitle = (r.title || '').toLowerCase().includes(q);
+        const inCategory = (r.category || '').toLowerCase().includes(q);
+        const inTags = Array.isArray(r.tags) && r.tags.some(t => t.toLowerCase().includes(q));
         if (!inTitle && !inCategory && !inTags) return false;
       }
 
@@ -250,6 +250,7 @@ function Bookmarks({ resources, onToggleBookmark, onOpenResource, onNavigateToLi
                   resource={resource}
                   onOpen={onOpenResource}
                   onBookmarkToggle={onToggleBookmark}
+                    onDelete={onDeleteResource}
                 />
               ))}
             </ul>

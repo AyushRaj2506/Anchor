@@ -23,6 +23,7 @@ function TaskFilters({
   priority, onPriority,
   status, onStatus,
   sort, onSort,
+  categories = TASK_CATEGORIES,
 }) {
   return (
     <div className="tf-bar" role="search" aria-label="Filter and search tasks">
@@ -62,7 +63,7 @@ function TaskFilters({
             aria-label="Filter tasks by category"
           >
             <option value="all">All Categories</option>
-            {TASK_CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>

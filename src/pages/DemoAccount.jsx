@@ -84,7 +84,7 @@ function DemoAccount({ onDemoLogin, onSwitchView, theme, onToggleTheme }) {
 
           <div className="auth-form-header">
             <h1 className="auth-form-title">Try Anchor with Demo Account</h1>
-            <p className="auth-form-subtitle">Explore all features instantly with sample data.</p>
+            <p className="auth-form-subtitle">Explore sample features instantly with sample data.</p>
           </div>
 
           {/* Styled backpack graphics illustration */}
@@ -99,7 +99,7 @@ function DemoAccount({ onDemoLogin, onSwitchView, theme, onToggleTheme }) {
               <span className="demo-checklist-check" aria-hidden="true">✓</span>
               <div>
                 <strong className="demo-checklist-title">Explore all features</strong>
-                <span className="demo-checklist-desc">Test everything Anchor can do</span>
+                <span className="demo-checklist-desc">Browse resources, bookmarks, and tasks</span>
               </div>
             </li>
             <li className="demo-checklist-item">

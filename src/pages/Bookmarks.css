@@ -215,6 +215,7 @@
 
   .bm-search {
     max-width: none;
+    flex: 0 0 38px;
   }
 
   .bm-controls {

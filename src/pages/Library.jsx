@@ -4,10 +4,12 @@ import ResourceFilters from '../components/ResourceFilters';
 import ResourceCard from '../components/ResourceCard';
 import { RESOURCE_TYPES } from '../data/libraryData';
 import { auth, db } from '../config/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore/lite';
 import { uploadFile, deleteFile } from '../services/storage';
 import { analyzeResourceFile, analyzeResource, analyzeUrlResource } from '../services/ai';
 import './Library.css';
+import { safeWebUrl } from '../utils/url';
+import { useDialog } from '../utils/useDialog';
 
 /**
  * Library page — shows all saved resources with search/filter.
@@ -28,8 +30,8 @@ import './Library.css';
 
 const ITEMS_PER_PAGE = 6; // show 6 at a time; "Load more" adds 6 more
 
-function Library({ resources, loading, error, onOpenResource, onToggleBookmark, onAddResource, onDeleteResource, onUpdateResource, onCreateTasksFromAnalysis }) {
-  const [search, setSearch]       = useState('');
+function Library({ user, initialSearch = '', resources, loading, error, onOpenResource, onToggleBookmark, onAddResource, onDeleteResource, onUpdateResource, onCreateTasksFromAnalysis }) {
+  const [search, setSearch]       = useState(initialSearch);
   const [category, setCategory]   = useState('all');
   const [type, setType]           = useState('all');
   const [sort, setSort]           = useState('newest');
@@ -53,9 +55,11 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
   const [uploadError, setUploadError]       = useState('');
   const [aiNotification, setAiNotification] = useState('');  // post-upload AI status message
 
+  const dialogRef = useDialog(showAddModal, () => setShowAddModal(false), !['idle', 'error'].includes(uploadState));
+
   // ── Compute unique categories from actual resources ──
   const computedCategories = useMemo(() => {
-    const catMap = {};
+    const catMap = Object.create(null);
     (resources || []).forEach(r => {
       const cat = r.category || 'Uncategorized';
       catMap[cat] = (catMap[cat] || 0) + 1;
@@ -72,22 +76,30 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
   }, [resources]);
 
   async function handleAddSubmit() {
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || !['idle', 'error'].includes(uploadState)) return;
+    const invalid = message => { setUploadState('error'); setUploadError(message); };
+    if (['Note', 'Document', 'Email'].includes(newType) && !newContent.trim()) return invalid('Please enter the resource content.');
+    if (newContent.length > 48000) return invalid('Content is too long. Please use fewer than 48,000 characters.');
+    if (['URL', 'Google Drive'].includes(newType) && !safeWebUrl(newUrl.trim())) return invalid('Enter a valid HTTP/HTTPS URL.');
+    if (newType === 'Email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmailSender.trim())) return invalid('Enter a valid sender email address.');
+    if (newType === 'PDF' || newType === 'Image') {
+      const allowed = newType === 'PDF' ? ['application/pdf'] : ['image/jpeg', 'image/png', 'image/webp'];
+      if (!selectedFile || !allowed.includes(selectedFile.type)) return invalid('Choose a file matching the selected resource type.');
+      if (!selectedFile.size || selectedFile.size > 20 * 1024 * 1024) return invalid('Choose a nonempty file up to 20 MB.');
+    }
 
     let typeToUse = newType || 'Document';
-    if (newType !== 'URL' && newType !== 'Google Drive' && newUrl.trim()) {
-      // Compatibility if user was typing in old url field
-      typeToUse = 'URL';
-    }
+
 
     const typeIconMap = { URL: '🔗', PDF: '📄', Note: '📝', Image: '🖼', Document: '📋', 'Google Drive': '📂', Email: '✉️' };
     const iconBgMap   = { URL: '#fef4e0', PDF: '#fde8e0', Note: '#e3f0e3', Image: '#e0ebf5', Document: '#ede3f5', 'Google Drive': '#e0f7fa', Email: '#fce4ec' };
 
     const tags = newTags.trim()
-      ? newTags.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+      ? [...new Set(newTags.split(',').map(t => t.trim().toLowerCase().slice(0, 100)).filter(Boolean))].slice(0, 20)
       : [];
 
-    const isDemoUser = !auth.currentUser || JSON.parse(localStorage.getItem('anchor-user') || '{}').isDemo;
+    const isDemoUser = user?.isDemo === true;
+    if (!isDemoUser && !auth?.currentUser) return invalid('Your session expired. Please sign in again.');
 
     if ((typeToUse === 'PDF' || typeToUse === 'Image') && !isDemoUser) {
       // PDF / Image file upload flow for real user
@@ -96,9 +108,9 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
         return;
       }
 
-      // Validate size limit (50 MB = 52428800 bytes)
+      // Validate size limit (20 MB = 20971520 bytes)
       if (selectedFile.size > 52428800) {
-        alert('File size exceeds the 50 MB limit.');
+        alert('File size exceeds the 20 MB limit.');
         return;
       }
 
@@ -240,6 +252,8 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
       // Normal Firestore-only flow (Notes, Documents, URLs, or any resource in Demo Mode)
       if (onAddResource) {
         try {
+          setUploadState('saving');
+          setUploadError('');
           // If PDF/Image in Demo mode, construct dummy metadata
           const isFileDemo = (typeToUse === 'PDF' || typeToUse === 'Image');
           
@@ -294,7 +308,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                 if (typeToUse === 'URL' || typeToUse === 'Google Drive') {
                   result = await analyzeUrlResource(newResourceData, freshToken);
                 } else {
-                  result = await analyzeResource(newResourceData); // Text/Note/Document
+                  result = await analyzeResource(newResourceData, freshToken); // Text/Note/Document
                 }
 
                 if (result && onUpdateResource) {
@@ -338,6 +352,8 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
           }
         } catch (err) {
           console.error('Demo/Text resource addition failed:', err);
+          setUploadState('error');
+          setUploadError('Could not save the resource. Please try again.');
         }
       }
     }
@@ -407,6 +423,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
         <button
           className="lib-add-btn"
           aria-label="Add a new resource"
+          disabled={loading}
           onClick={() => setShowAddModal(true)}
         >
           + Add Resource
@@ -590,6 +607,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
       {/* ── Add Resource Modal ── */}
       {showAddModal && (
         <div
+          ref={dialogRef}
           className="lib-modal-overlay"
           onClick={(e) => { if (e.target === e.currentTarget && (uploadState === 'idle' || uploadState === 'error')) setShowAddModal(false); }}
           onKeyDown={handleModalKeyDown}
@@ -612,6 +630,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
               </label>
               <input
                 id="add-res-title"
+                  maxLength={500}
                 type="text"
                 placeholder="e.g. DBMS Normalization Notes"
                 value={newTitle}
@@ -630,6 +649,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                 </label>
                 <input
                   id="add-res-category"
+                  maxLength={200}
                   type="text"
                   placeholder="e.g. DBMS"
                   value={newCategory}
@@ -646,7 +666,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                   id="add-res-type"
                   value={newType}
                   disabled={uploadState !== 'idle' && uploadState !== 'error'}
-                  onChange={e => setNewType(e.target.value)}
+                  onChange={e => { setNewType(e.target.value); setSelectedFile(null); setNewUrl(''); setUploadError(''); setUploadState('idle'); }}
                   style={{ padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', width: '100%', boxSizing: 'border-box' }}
                 >
                   {RESOURCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -657,7 +677,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
             {(newType === 'PDF' || newType === 'Image') ? (
               <div className="upload-area-wrapper">
                 <label className="lib-modal-label" htmlFor="add-res-file">
-                  Choose File * <span>(PDF or Image, max 50MB)</span>
+                  Choose File * <span>(PDF or Image, max 20MB)</span>
                 </label>
                 <div className="upload-area">
                   <input
@@ -675,7 +695,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                   <div className="upload-area-content">
                     <span className="upload-icon">📄</span>
                     <p className="upload-title">Upload a {newType === 'PDF' ? 'PDF' : 'image'}</p>
-                    <p className="upload-subtitle">PDF, JPG, PNG or WEBP • Max 50 MB</p>
+                    <p className="upload-subtitle">PDF, JPG, PNG or WEBP • Max 20 MB</p>
                   </div>
                 </div>
                 {selectedFile && (
@@ -692,6 +712,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                 </label>
                 <textarea
                   id="add-res-content"
+                  maxLength={48000}
                   className="lib-modal-input"
                   placeholder={`Type your ${newType.toLowerCase()} content here...`}
                   value={newContent}
@@ -708,6 +729,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                 </label>
                 <input
                   id="add-res-url"
+                  maxLength={2048}
                   className="lib-modal-input"
                   type="url"
                   placeholder="https://..."
@@ -799,7 +821,7 @@ function Library({ resources, loading, error, onOpenResource, onToggleBookmark, 
                   </div>
                 )}
                 {uploadState === 'saving' && <div style={{ color: 'var(--color-accent)', fontWeight: 'bold' }}>Saving resource metadata...</div>}
-                {uploadState === 'error' && <div style={{ color: 'var(--color-danger, #c0392b)', fontWeight: '500' }}>⚠️ {uploadError}</div>}
+                {uploadState === 'error' && <div role="alert" style={{ color: 'var(--color-danger, #c0392b)', fontWeight: '500' }}>⚠️ {uploadError}</div>}
               </div>
             )}
 

@@ -2,22 +2,23 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Search, Moon, Sun, Menu, X } from 'lucide-react';
 import { getDisplayName } from '../utils/user';
 import './Header.css';
+import { readJSON, writeJSON } from '../utils/persistence';
 
 const MAX_RECENT   = 5;
 const STORAGE_KEY  = 'anchor-recent-searches';
 
-function loadRecent() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-  catch { return []; }
+function loadRecent(key = STORAGE_KEY) {
+  const saved = readJSON(key, []);
+  return Array.isArray(saved) ? saved.filter(value => typeof value === 'string').slice(0, MAX_RECENT) : [];
 }
 
-function saveRecent(term) {
+function saveRecent(term, key = STORAGE_KEY) {
   if (!term || !term.trim()) return;
   const trimmed = term.trim();
-  let list = loadRecent().filter(s => s !== trimmed);
+  let list = loadRecent(key).filter(s => s !== trimmed);
   list.unshift(trimmed);
   list = list.slice(0, MAX_RECENT);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  writeJSON(key, list);
 }
 
 /**
@@ -36,6 +37,7 @@ function saveRecent(term) {
  */
 function Header({
   onMenuToggle,
+  sidebarOpen = false,
   activePage,
   theme,
   onToggleTheme,
@@ -56,6 +58,7 @@ function Header({
   };
   const title = PAGE_TITLES[activePage] || 'Anchor';
 
+  const recentKey = STORAGE_KEY + ':' + (user?.isDemo ? 'demo' : user?.uid || 'guest');
   const displayName = getDisplayName(user);
   const initial     = displayName ? displayName.charAt(0).toUpperCase() : 'U';
 
@@ -66,7 +69,6 @@ function Header({
   const [recentList,  setRecentList]  = useState([]);
   const wrapperRef  = useRef(null);
   const inputRef    = useRef(null);
-  const debounceRef = useRef(null);
 
   // Close on outside click
   useEffect(() => {
@@ -96,6 +98,9 @@ function Header({
         r.type || '',
         r.description || '',
         r.notes || '',
+        r.content || '',
+        r.contentText || '',
+        r.aiSummary || '',
         ...(Array.isArray(r.tags) ? r.tags : []),
         ...(Array.isArray(r.aiTags) ? r.aiTags : []),
       ].join(' ').toLowerCase();
@@ -118,12 +123,15 @@ function Header({
   function handleInputChange(e) {
     const val = e.target.value;
     setQuery(val);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => runSearch(val), 180);
+
   }
 
+  useEffect(() => {
+    runSearch(query);
+  }, [query, runSearch]);
+
   function handleFocus() {
-    setRecentList(loadRecent());
+    setRecentList(loadRecent(recentKey));
     setIsOpen(true);
   }
 
@@ -134,26 +142,26 @@ function Header({
       inputRef.current?.blur();
     }
     if (e.key === 'Enter' && query.trim()) {
-      saveRecent(query);
+      saveRecent(query, recentKey);
       // Navigate to library as a "view all" action
-      if (onNavigate) onNavigate('library');
+      if (onNavigate) onNavigate(results.resources.length === 0 && results.tasks.length > 0 ? 'tasks' : 'library', query.trim());
       setIsOpen(false);
     }
   }
 
   function handleSelectResource(resource) {
-    saveRecent(query || resource.title);
-    setRecentList(loadRecent());
+    saveRecent(query || resource.title, recentKey);
+    setRecentList(loadRecent(recentKey));
     setIsOpen(false);
     setQuery('');
     if (onOpenResource) onOpenResource(resource);
   }
 
   function handleSelectTask() {
-    saveRecent(query);
+    saveRecent(query, recentKey);
     setIsOpen(false);
     setQuery('');
-    if (onNavigate) onNavigate('tasks');
+    if (onNavigate) onNavigate('tasks', query.trim());
   }
 
   function handleSelectRecent(term) {
@@ -192,6 +200,8 @@ function Header({
           className="header-menu-btn"
           onClick={onMenuToggle}
           aria-label="Open navigation menu"
+          aria-expanded={sidebarOpen}
+          aria-controls="anchor-navigation"
         >
           <Menu size={18} strokeWidth={2} aria-hidden="true" />
         </button>
@@ -316,12 +326,12 @@ function Header({
                 <button
                   className="hsr-footer-btn"
                   onClick={() => {
-                    saveRecent(query);
+                    saveRecent(query, recentKey);
                     setIsOpen(false);
                     if (onNavigate) onNavigate('library');
                   }}
                 >
-                  View all results in Library →
+                  View all results in {results.resources.length === 0 && results.tasks.length > 0 ? 'Tasks' : 'Library'} →
                 </button>
               )}
             </div>

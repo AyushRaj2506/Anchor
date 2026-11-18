@@ -16,8 +16,7 @@ function ResourceStats({ resources = [] }) {
     const total     = resources.length;
     const pdfs      = resources.filter(r => r.type === 'PDF').length;
     const notes     = resources.filter(r => r.type === 'Note' || r.type === 'Document').length;
-    const links     = resources.filter(r => r.type === 'URL').length;
-    const images    = resources.filter(r => r.type === 'Image').length;
+    const links     = resources.filter(r => (r.type === 'URL' || r.type === 'Google Drive')).length;
 
     const pctOf = (n) => total > 0 ? `${Math.round((n / total) * 100)}% of total` : '—';
 

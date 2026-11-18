@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore/lite";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,9 +12,22 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+const configured = !!(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
+let app = null;
+let auth = null;
+let db = null;
+if (configured) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } catch {
+    // Keep demo mode available when deployment configuration is invalid.
+    app = null;
+    auth = null;
+    db = null;
+  }
+}
 
 export { app, auth, db };
 

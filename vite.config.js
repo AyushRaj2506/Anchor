@@ -1,65 +1,57 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import dotenv from 'dotenv'
-import fs from 'fs'
-import path from 'path'
-import { pathToFileURL } from 'url'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-// Load environment variables for local backend simulation
-if (fs.existsSync('.env.local')) {
-  dotenv.config({ path: '.env.local' });
-} else {
-  dotenv.config({ path: '.env.example' });
-}
+dotenv.config({ path: ['.env.local', '.env'], quiet: true });
 
-// A simple Vite plugin to mock/run our Vercel Serverless Function locally
+const endpoints = new Set([
+  '/api/ai/analyze', '/api/ai/analyze-url', '/api/ai/analyze-resource', '/api/ai/ask',
+  '/api/storage/create-upload-url', '/api/storage/create-download-url', '/api/storage/delete-file',
+]);
+
+const apiMiddleware = (req, res, next) => {
+  const pathname = req.url?.split('?')[0];
+  if (!pathname?.startsWith('/api/')) return next();
+  res.setHeader('Content-Type', 'application/json');
+  const json = (status, error) => { if (!res.writableEnded) { res.statusCode = status; res.end(JSON.stringify({ success: false, error })); } };
+  if (!endpoints.has(pathname)) return json(404, 'API endpoint not found.');
+  if (req.method !== 'POST') return json(405, 'Method not allowed.');
+  let bytes = 0;
+  const chunks = [];
+  req.on('data', chunk => {
+    bytes += chunk.length;
+    if (bytes > 1024 * 1024) { chunks.length = 0; json(413, 'Request is too large.'); }
+    else if (!res.writableEnded) chunks.push(chunk);
+  });
+  req.on('error', () => json(400, 'Could not read request.'));
+  req.on('end', async () => {
+    if (res.writableEnded) return;
+    let body;
+    try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+    catch { return json(400, 'A valid JSON body is required.'); }
+    try {
+      const handlerPath = path.resolve(process.cwd(), '.' + pathname + '.js');
+      const { default: handler } = await import(pathToFileURL(handlerPath).href);
+      const response = {
+        status(code) { res.statusCode = code; return response; },
+        json(data) { res.end(JSON.stringify(data)); return response; },
+      };
+      await handler({ method: req.method, headers: req.headers, body }, response);
+    } catch (error) {
+      console.error('Local API request failed:', error.message);
+      json(500, 'The request could not be completed. Please try again.');
+    }
+  });
+};
+
 const localApiPlugin = () => ({
   name: 'local-api',
-  configureServer(server) {
-    server.middlewares.use(async (req, res, next) => {
-      if (req.url.startsWith('/api/') && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => { body += chunk; });
-        req.on('end', async () => {
-          try {
-            const parsedBody = body ? JSON.parse(body) : {};
-            const mockReq = { method: 'POST', body: parsedBody, headers: req.headers };
-            
-            // Map the request URL path directly to local serverless handler file
-            // e.g. /api/storage/create-upload-url -> api/storage/create-upload-url.js
-            const relativePath = req.url.split('?')[0].replace(/^\//, '') + '.js';
-            const absolutePath = path.resolve(process.cwd(), relativePath);
-            
-            // Append cache buster to prevent ESM import caching in Node during development
-            const handlerModule = await import(pathToFileURL(absolutePath).href + '?t=' + Date.now());
-            const handler = handlerModule.default;
-
-            const mockRes = {
-              status(code) {
-                res.statusCode = code;
-                return mockRes;
-              },
-              json(data) {
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify(data));
-                return mockRes;
-              }
-            };
-
-            await handler(mockReq, mockRes);
-          } catch (err) {
-            res.statusCode = 500;
-            res.end(JSON.stringify({ success: false, error: err.message }));
-          }
-        });
-      } else {
-        next();
-      }
-    });
-  }
+  configureServer(server) { server.middlewares.use(apiMiddleware); },
+  configurePreviewServer(server) { server.middlewares.use(apiMiddleware); },
 });
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), localApiPlugin()],
   test: {
@@ -69,8 +61,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['src/**/*.{js,jsx}'],
+      include: ['src/**/*.{js,jsx}', 'api/**/*.js', 'server/**/*.js'],
       exclude: ['src/**/*.test.{js,jsx}', 'src/main.jsx'],
     },
   },
-})
+});

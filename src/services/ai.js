@@ -12,8 +12,8 @@
  * @returns {Promise<Object>} The structured analysis result
  * @throws {Error} Human-readable error message if the analysis fails.
  */
-export async function analyzeText(text) {
-  return fetchAI('/api/ai/analyze', { text });
+export async function analyzeText(text, idToken) {
+  return fetchAI('/api/ai/analyze', { text }, idToken);
 }
 
 /**
@@ -23,7 +23,7 @@ export async function analyzeText(text) {
  * @returns {Promise<Object>} The structured AI analysis result
  * @throws {Error} Human-readable error message if the analysis fails.
  */
-export async function analyzeResource(resource) {
+export async function analyzeResource(resource, idToken) {
   // Clean resource to send only required fields to minimize payload
   const cleanedResource = {
     title: resource.title || '',
@@ -38,7 +38,7 @@ export async function analyzeResource(resource) {
     tags: Array.isArray(resource.tags) ? resource.tags : []
   };
 
-  return fetchAI('/api/ai/analyze', { resource: cleanedResource });
+  return fetchAI('/api/ai/analyze', { resource: cleanedResource }, idToken);
 }
 
 /**
@@ -97,16 +97,17 @@ async function fetchAI(url, payload, idToken = null) {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(110000),
     });
 
     let data;
     try {
       data = await response.json();
-    } catch (parseError) {
+    } catch {
       throw new Error('Received an invalid response from the server.');
     }
 
-    if (!response.ok || !data.success) {
+    if (!response.ok || !data?.success) {
       throw new Error(data.error || `Server error: ${response.status}`);
     }
 

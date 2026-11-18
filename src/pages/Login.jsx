@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import './Login.css';
 
@@ -12,6 +12,7 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
 
   function validateForm() {
     const newErrors = {};
@@ -23,8 +24,7 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
 
     if (!password) {
       newErrors.password = 'Password is required.';
-    } else if (password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters.';
+
     }
 
     setErrors(newErrors);
@@ -33,21 +33,44 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (loading) return;
     if (validateForm()) {
       setLoading(true);
       try {
-        await signInWithEmailAndPassword(auth, email, password);
+        if (!auth) throw new Error('Authentication is not configured.');
+        await signInWithEmailAndPassword(auth, email.trim(), password);
         // Navigation will be handled automatically by onAuthStateChanged in App.jsx
       } catch (err) {
         let authErr = 'Invalid email or password.';
         if (err.code === 'auth/network-request-failed') {
           authErr = 'Unable to connect to the authentication service. Please try again.';
         }
-        setErrors({ ...errors, auth: authErr });
+        if (!auth) authErr = 'Sign-in is not configured. You can explore the demo account.';
+        setErrors({ auth: authErr });
       } finally {
         setLoading(false);
       }
     }
+  }
+
+  async function handleResetPassword(event) {
+    event.preventDefault();
+    if (loading) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setErrors({ email: 'Enter your email address above to reset your password.' });
+      return;
+    }
+    setLoading(true);
+    setErrors({});
+    setResetMessage('');
+    try {
+      if (!auth) throw new Error('Authentication is not configured.');
+      await sendPasswordResetEmail(auth, email.trim());
+      setResetMessage('If an account exists for this email, a password reset link has been sent.');
+    } catch (error) {
+      if (error.code === 'auth/user-not-found') setResetMessage('If an account exists for this email, a password reset link has been sent.');
+      else setErrors({ auth: 'Could not send a reset link. Please try again later.' });
+    } finally { setLoading(false); }
   }
 
   return (
@@ -136,6 +159,7 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
               </div>
             )}
             
+            {resetMessage && <p role="status">{resetMessage}</p>}
             {/* Email input */}
             <div className="auth-field">
               <label htmlFor="login-email" className="auth-label">Email address</label>
@@ -143,6 +167,7 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
                 <span className="auth-input-icon" aria-hidden="true">✉</span>
                 <input
                   id="login-email"
+                  autoComplete="email"
                   type="email"
                   className={`auth-input ${errors.email ? 'auth-input--error' : ''}`}
                   placeholder="Enter your email"
@@ -163,7 +188,7 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
             <div className="auth-field">
               <div className="auth-password-header">
                 <label htmlFor="login-password" className="auth-label">Password</label>
-                <a href="#forgot" className="auth-link" onClick={(e) => e.preventDefault()}>
+                <a href="#forgot" className="auth-link" onClick={handleResetPassword}>
                   Forgot password?
                 </a>
               </div>
@@ -171,6 +196,7 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
                 <span className="auth-input-icon" aria-hidden="true">🔒</span>
                 <input
                   id="login-password"
+                  autoComplete="current-password"
                   type={showPassword ? 'text' : 'password'}
                   className={`auth-input ${errors.password ? 'auth-input--error' : ''}`}
                   placeholder="Enter your password"
@@ -215,7 +241,7 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
         </div>
 
         <div className="auth-encrypted-badge">
-          <span aria-hidden="true">🔒</span> Your data is encrypted and never shared.
+          <span aria-hidden="true">🔒</span> Your saved data is private to your account.
         </div>
       </div>
     </div>

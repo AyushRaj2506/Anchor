@@ -1,6 +1,7 @@
 export function getDisplayName(user) {
   if (!user) return "User";
   if (user.isDemo) return "Demo User";
+  if (user.name?.trim()) return user.name.trim();
   if (user.email) {
     const prefix = user.email.split('@')[0];
     const firstPart = prefix.split('.')[0];

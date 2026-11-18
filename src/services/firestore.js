@@ -1,5 +1,7 @@
 import { db } from '../config/firebase';
-import { doc, collection, getDocs, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { resourceRecord, taskRecord } from '../utils/records';
+import { analysisTaskId } from '../utils/tasks';
+import { doc, collection, getDocs, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, runTransaction } from 'firebase/firestore/lite';
 
 /**
  * Firestore Service helper functions.
@@ -42,10 +44,7 @@ export async function getResources(userId) {
   const q = query(colRef, orderBy('createdAt', 'desc'));
   const snapshot = await getDocs(q);
   
-  return snapshot.docs.map(docSnap => ({
-    id: docSnap.id,
-    ...docSnap.data()
-  }));
+  return snapshot.docs.map(docSnap => resourceRecord(docSnap.data(), docSnap.id));
 }
 
 /**
@@ -100,10 +99,7 @@ export async function getTasks(userId) {
   const q = query(colRef, orderBy('createdAt', 'desc'));
   const snapshot = await getDocs(q);
   
-  return snapshot.docs.map(docSnap => ({
-    id: docSnap.id,
-    ...docSnap.data()
-  }));
+  return snapshot.docs.map(docSnap => taskRecord(docSnap.data(), docSnap.id));
 }
 
 /**
@@ -138,4 +134,17 @@ export async function deleteTask(userId, taskId) {
   if (!userId || !taskId) throw new Error('userId and taskId are required');
   const docRef = doc(db, 'users', userId, 'tasks', taskId);
   await deleteDoc(docRef);
+}
+
+// A transaction and deterministic ID prevent duplicate AI tasks across retries/tabs.
+export async function addAnalysisTask(userId, resourceId, taskData) {
+  if (!userId || !resourceId) throw new Error('A user and resource are required.');
+  const id = await analysisTaskId(resourceId, taskData.title);
+  const ref = doc(db, 'users', userId, 'tasks', id);
+  return runTransaction(db, async transaction => {
+    const existing = await transaction.get(ref);
+    if (existing.exists()) return { created: false, task: taskRecord(existing.data(), id) };
+    transaction.set(ref, { ...taskData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    return { created: true, task: { ...taskData, id, createdAt: new Date() } };
+  });
 }

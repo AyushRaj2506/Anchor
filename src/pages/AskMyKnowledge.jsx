@@ -121,13 +121,29 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
       return;
     }
 
+    if (user?.isDemo) {
+      setIsTyping(false);
+      setMessages(prev => [...prev, {
+        id: 'a-' + crypto.randomUUID(), role: 'assistant', time: timeString,
+        content: 'Demo search preview. Sign in to your account for AI answers.\n\n' + [
+          ...context.resources.map(resource => resource.title + ': ' + (resource.content || resource.aiSummary || resource.description || 'Open this sample resource to explore its details.').slice(0, 800)),
+          ...context.tasks.map(task => task.title + ' — ' + task.status + (task.deadline ? ', ' + task.deadline : '')),
+        ].join('\n\n'),
+        sources: [
+          ...context.resources.map(resource => ({ original: resource, sourceType: 'resource' })),
+          ...context.tasks.map(task => ({ original: task, sourceType: 'task' })),
+        ],
+      }]);
+      return;
+    }
+
     // ── Transition loading text ──
     const loadingTimer = setTimeout(() => setTypingText('Generating answer...'), 700);
 
     // ── Call Gemini via Vercel API ──
     try {
       let idToken = null;
-      if (auth.currentUser && (!user || !user.isDemo)) {
+      if (auth?.currentUser && !user?.isDemo) {
         idToken = await auth.currentUser.getIdToken();
       }
 
@@ -156,7 +172,7 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
         notFound: response.notFound,
       }]);
 
-    } catch (err) {
+    } catch {
       clearTimeout(loadingTimer);
       setIsTyping(false);
       setMessages(prev => [...prev, {
@@ -196,7 +212,7 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
       if (line.startsWith('•') || line.startsWith('-') || line.match(/^\d+\./)) {
         return (
           <ul key={idx} className="ak-msg-list">
-            <li>{line.replace(/^[•\-]\s*|\d+\.\s*/, '').trim()}</li>
+            <li>{line.replace(/^[•-]\s*|^\d+\.\s*/, '').trim()}</li>
           </ul>
         );
       }
@@ -207,6 +223,7 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
 
   function formatBytes(bytes) {
     if (!bytes) return '';
+    if (typeof bytes === 'string') return bytes;
     const mb = bytes / 1024 / 1024;
     if (mb >= 1) return `${mb.toFixed(1)} MB`;
     return `${(bytes / 1024).toFixed(0)} KB`;
@@ -348,7 +365,7 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
                        <span className="ak-sender-name">Anchor</span>
                     </div>
                   </div>
-                  <div className="ak-message-bubble ak-bubble-ai ak-typing-bubble">
+                  <div role="status" aria-label={typingText} className="ak-message-bubble ak-bubble-ai ak-typing-bubble">
                     <div className="ak-dots">
                       <span></span><span></span><span></span>
                     </div>
@@ -372,6 +389,7 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
             onKeyDown={handleKeyDown}
             disabled={isTyping}
             rows={1}
+            maxLength={1000}
             aria-label="Ask about your saved knowledge"
           />
           <button

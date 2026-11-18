@@ -18,7 +18,7 @@ describe('AskMyKnowledge Component', () => {
     expect(screen.getAllByText('Ask My Knowledge')[0]).toBeInTheDocument();
   });
 
-  it('allows user to submit a question and renders successful response', async () => {
+  it('provides a grounded local preview in demo mode without calling the paid API', async () => {
     aiService.askQuestion.mockResolvedValueOnce({
       answer: 'This is the AI response',
       sources: []
@@ -37,11 +37,13 @@ describe('AskMyKnowledge Component', () => {
     
     // Wait for AI response
     await waitFor(() => {
-      expect(screen.getByText(/I couldn't find information related to your question in your saved resources or tasks/i)).toBeInTheDocument();
+      expect(screen.getByText(/Demo search preview/)).toBeInTheDocument();
+      expect(screen.getByText('Note: hello')).toBeInTheDocument();
+      expect(aiService.askQuestion).not.toHaveBeenCalled();
     });
   });
 
-  it('displays fallback error on AI failure', async () => {
+  it('displays a not-found response when saved knowledge does not match', async () => {
     aiService.askQuestion.mockRejectedValueOnce(new Error('Network Error'));
 
     render(<AskMyKnowledge resources={[{ id: '1', title: 'Note', content: 'hello' }]} tasks={[]} user={{ isDemo: true }} />);

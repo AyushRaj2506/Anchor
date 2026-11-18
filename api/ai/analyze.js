@@ -1,15 +1,15 @@
-import { GoogleGenAI } from '@google/genai';
+import { requireAuth } from '../../server/auth.js';
+import { generateAIContent, getAIModel, getThinkingConfig, sendAIError, withTimeout, parseAIResponse, validateAnalysis } from '../../server/clients.js';
+import { validBody } from '../../server/validation.js';
 
 // Initialize Gemini SDK with the server-side environment variable.
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const MAX_INPUT_LENGTH = 50000; // 50k chars reasonable limit
 
 export default async function handler(req, res) {
-  // Only allow POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
+  if (!validBody(req, res)) return;
+  const authenticatedUser = await requireAuth(req, res);
+  if (!authenticatedUser) return;
 
   try {
     let textToAnalyze = '';
@@ -17,11 +17,15 @@ export default async function handler(req, res) {
     // 1. Parse and Validate Input
     if (req.body.resource) {
       const { resource } = req.body;
-      if (!resource || typeof resource !== 'object') {
+      if (!resource || typeof resource !== 'object' || Array.isArray(resource)) {
         return res.status(400).json({ success: false, error: 'Invalid resource object provided.' });
       }
 
       const { title, description, notes, category, tags, content } = resource;
+      if ([title, description, notes, category, content].some(value => value != null && typeof value !== 'string')
+        || tags != null && (!Array.isArray(tags) || tags.some(tag => typeof tag !== 'string'))) {
+        return res.status(400).json({ success: false, error: 'Resource fields must contain text.' });
+      }
       
       // Combine fields to construct a usable text block
       const parts = [];
@@ -118,62 +122,25 @@ ${textToAnalyze}
     `.trim();
 
     // 4. Call Gemini
-    const fetchPromise = ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+    const fetchPromise = generateAIContent({
+        model: getAIModel(),
         contents: prompt,
         config: {
+          httpOptions: { timeout: 25000, retryOptions: { attempts: 1 } },
+          thinkingConfig: getThinkingConfig(),
+          maxOutputTokens: 8192,
           responseMimeType: "application/json",
-          responseSchema: {
-            type: "object",
-            properties: {
-              summary: { type: "string", nullable: true },
-              category: { type: "string", nullable: true },
-              tags: { type: "array", items: { type: "string" } },
-              importantInformation: { type: "array", items: { type: "string" } },
-              deadlines: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string', nullable: true },
-                    deadline: { type: 'string', nullable: true },
-                    sourceText: { type: 'string', nullable: true },
-                  },
-                  required: ['title']
-                }
-              },
-              actionItems: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    title: { type: 'string' },
-                    description: { type: 'string', nullable: true },
-                    deadline: { type: 'string', nullable: true },
-                  },
-                  required: ['title']
-                }
-              },
-              contentText: { type: "string", nullable: true }
-            },
-            required: ["summary", "category", "tags", "importantInformation", "deadlines", "actionItems", "contentText"]
-          },
+
           temperature: 0.1
         }
     });
 
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('AI Request timed out.')), 15000)
-    );
-
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
+    const response = await withTimeout(fetchPromise, 25000);
     
     let resultJson;
     try {
-      resultJson = JSON.parse(response.text);
-    } catch (parseError) {
-      console.error('Failed to parse Gemini response as JSON:', response.text);
+      resultJson = parseAIResponse(response);
+    } catch {
       return res.status(502).json({
         success: false,
         error: 'AI returned malformed data. Please try again.'
@@ -181,40 +148,7 @@ ${textToAnalyze}
     }
 
     // 5. Schema Validation
-    let contentText = typeof resultJson.contentText === 'string' ? resultJson.contentText : '';
-    let contentTruncated = false;
-    if (contentText.length > MAX_INPUT_LENGTH) {
-      contentText = contentText.substring(0, MAX_INPUT_LENGTH);
-      contentTruncated = true;
-    }
-
-    const validatedData = {
-      summary: typeof resultJson.summary === 'string' ? resultJson.summary : null,
-      category: typeof resultJson.category === 'string' ? resultJson.category : null,
-      tags: Array.isArray(resultJson.tags) ? resultJson.tags.filter(t => typeof t === 'string') : [],
-      importantInformation: Array.isArray(resultJson.importantInformation) ? resultJson.importantInformation.filter(f => typeof f === 'string') : [],
-      deadlines: Array.isArray(resultJson.deadlines)
-        ? resultJson.deadlines
-            .filter(d => d && typeof d.title === 'string')
-            .map(d => ({
-              title: d.title,
-              description: d.description || null,
-              deadline: typeof d.deadline === 'string' ? d.deadline : null,
-              sourceText: d.sourceText || null,
-            }))
-        : [],
-      actionItems: Array.isArray(resultJson.actionItems)
-        ? resultJson.actionItems
-            .filter(a => a && typeof a.title === 'string')
-            .map(a => ({
-              title: a.title,
-              description: a.description || null,
-              deadline: typeof a.deadline === 'string' ? a.deadline : null,
-            }))
-        : [],
-      contentText: contentText || null,
-      contentTruncated
-    };
+    const validatedData = validateAnalysis(resultJson, MAX_INPUT_LENGTH);
 
     return res.status(200).json({
       success: true,
@@ -222,10 +156,7 @@ ${textToAnalyze}
     });
 
   } catch (error) {
-    console.error('Gemini API Error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'AI analysis failed due to an internal or network error.'
-    });
+    console.error('AI request failed:', error.status || error.name);
+    return sendAIError(res, error);
   }
 }

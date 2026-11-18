@@ -10,6 +10,17 @@
 :root,
 :root[data-theme="light"] {
 
+  /* Shared aliases used by forms and older components. */
+  --bg-primary: var(--color-surface);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --accent: var(--color-accent);
+  --border: var(--color-border);
+  --color-text: var(--color-text-primary);
+  --font-heading: var(--font-sans);
+  --font-body: var(--font-sans);
+
   /* ── Color: Backgrounds ── */
   --color-bg:               #f7f5f1;   /* warm ivory page background */
   --color-surface:          #ffffff;   /* card / panel surface */

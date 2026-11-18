@@ -6,7 +6,7 @@ import './Signup.css';
 /**
  * Signup Component - Registration page for creating Anchor credentials.
  */
-function Signup({ onSwitchView, theme, onToggleTheme }) {
+function Signup({ onSwitchView, theme, onToggleTheme, onProfileUpdated }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,18 +68,22 @@ function Signup({ onSwitchView, theme, onToggleTheme }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (loading) return;
     if (validateForm()) {
       setLoading(true);
       try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(userCredential.user, { displayName: fullName });
+        if (!auth) throw new Error('Authentication is not configured.');
+        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        await updateProfile(userCredential.user, { displayName: fullName.trim() });
+        onProfileUpdated?.(fullName.trim());
         // Navigation handled by onAuthStateChanged in App.jsx
       } catch (err) {
         let authErr = 'Failed to create account.';
         if (err.code === 'auth/email-already-in-use') authErr = 'This email is already registered. Try logging in instead.';
         if (err.code === 'auth/weak-password') authErr = 'Password is too weak.';
         if (err.code === 'auth/network-request-failed') authErr = 'Unable to connect to the authentication service. Please try again.';
-        setErrors({ ...errors, auth: authErr });
+        if (!auth) authErr = 'Registration is not configured. You can explore the demo account.';
+        setErrors({ auth: authErr });
       } finally {
         setLoading(false);
       }
@@ -111,11 +115,11 @@ function Signup({ onSwitchView, theme, onToggleTheme }) {
           </div>
 
           <h2 className="auth-hero-title">
-            Welcome back!<br />Let's continue<br />
+            Build your<br />second brain.<br />
             <span className="auth-hero-title-accent">your journey.</span>
           </h2>
           <p className="auth-hero-desc">
-            Log in to access your personal knowledge hub.
+            Create an account to save your resources and tasks.
           </p>
 
           <ul className="auth-features" role="list">
@@ -201,6 +205,7 @@ function Signup({ onSwitchView, theme, onToggleTheme }) {
                 <span className="auth-input-icon" aria-hidden="true">✉</span>
                 <input
                   id="signup-email"
+                  autoComplete="email"
                   type="email"
                   className={`auth-input ${errors.email ? 'auth-input--error' : ''}`}
                   placeholder="Enter your email"
@@ -224,6 +229,7 @@ function Signup({ onSwitchView, theme, onToggleTheme }) {
                 <span className="auth-input-icon" aria-hidden="true">🔒</span>
                 <input
                   id="signup-password"
+                  autoComplete="new-password"
                   type={showPassword ? 'text' : 'password'}
                   className={`auth-input ${errors.password ? 'auth-input--error' : ''}`}
                   placeholder="Create a password"

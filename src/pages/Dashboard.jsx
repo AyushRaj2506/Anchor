@@ -29,7 +29,7 @@ function getGreeting() {
 const STAGGER_BASE = 40;
 const STAGGER_STEP = 55;
 
-function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookmark }) {
+function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookmark, onOpenResource }) {
   const greeting = getGreeting();
 
   // Derive all stats dynamically
@@ -73,7 +73,7 @@ function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookm
         style={{ animationDelay: `${STAGGER_BASE + STAGGER_STEP}ms` }}
         aria-label="Academic metrics summary"
       >
-        <div className="metric-strip-item" onClick={() => onNavigate && onNavigate('library')}>
+        <div className="metric-strip-item" role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate?.('library'); } }} onClick={() => onNavigate?.('library')}>
           <div className="metric-strip-icon-box" style={{ background: 'var(--color-green-soft)', color: 'var(--color-green)' }}>
             📚
           </div>
@@ -85,7 +85,7 @@ function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookm
 
         <div className="metric-strip-divider" aria-hidden="true" />
 
-        <div className="metric-strip-item" onClick={() => onNavigate && onNavigate('tasks')}>
+        <div className="metric-strip-item" role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate?.('tasks'); } }} onClick={() => onNavigate?.('tasks')}>
           <div className="metric-strip-icon-box" style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
             ✓
           </div>
@@ -97,7 +97,7 @@ function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookm
 
         <div className="metric-strip-divider" aria-hidden="true" />
 
-        <div className="metric-strip-item" onClick={() => onNavigate && onNavigate('tasks')}>
+        <div className="metric-strip-item" role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate?.('tasks'); } }} onClick={() => onNavigate?.('tasks')}>
           <div className="metric-strip-icon-box" style={{ background: 'var(--color-danger-bg)', color: 'var(--color-danger)' }}>
             ⏰
           </div>
@@ -129,6 +129,7 @@ function Dashboard({ resources = [], tasks = [], user, onNavigate, onToggleBookm
         </div>
         <ResourceList
           resources={resources}
+          onOpenResource={onOpenResource}
           onNavigate={onNavigate}
           onToggleBookmark={onToggleBookmark}
         />

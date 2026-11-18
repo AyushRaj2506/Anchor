@@ -192,6 +192,7 @@
 
   .rf-search {
     max-width: none;
+    flex: 0 0 38px;
   }
 
   .rf-controls {
