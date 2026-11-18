@@ -70,4 +70,40 @@ describe('Application session and persistence regressions', () => {
     await screen.findByText('Could not save the task changes. Please try again.');
     expect(select).toHaveValue('todo');
   });
+
+  it('keeps the global query when viewing all results from the current Library page', async () => {
+    state.initial = { uid: 'student', email: 'student@example.com' };
+    state.resources.mockResolvedValue([
+      { id: 'matching', title: 'OS guide', type: 'Note', content: 'System calls explained' },
+      { id: 'other', title: 'Other lecture', type: 'Note', content: 'Different topic' },
+    ]);
+    render(<App />);
+    await screen.findByText('OS guide');
+    fireEvent.click(screen.getByRole('button', { name: 'Library', exact: true }));
+    await screen.findByRole('searchbox', { name: 'Search resources by title, category, or tag' });
+    const globalSearch = screen.getByRole('searchbox', { name: 'Search your resources and tasks' });
+    fireEvent.focus(globalSearch);
+    fireEvent.change(globalSearch, { target: { value: 'system calls' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'View all results in Library →' }));
+    expect(await screen.findByRole('searchbox', { name: 'Search resources by title, category, or tag' })).toHaveValue('system calls');
+    expect(screen.getByRole('button', { name: 'View details for OS guide' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View details for Other lecture' })).not.toBeInTheDocument();
+  });
+
+  it('opens filtered Tasks when the global search has only task results', async () => {
+    state.initial = { uid: 'student', email: 'student@example.com' };
+    state.tasks.mockResolvedValue([
+      { id: 'matching', title: 'Submit report', status: 'todo' },
+      { id: 'other', title: 'Read chapter', status: 'todo' },
+    ]);
+    render(<App />);
+    await screen.findByText('Submit report');
+    const globalSearch = screen.getByRole('searchbox', { name: 'Search your resources and tasks' });
+    fireEvent.focus(globalSearch);
+    fireEvent.change(globalSearch, { target: { value: 'Submit report' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'View all results in Tasks →' }));
+    expect(await screen.findByRole('searchbox', { name: 'Search tasks by title or category' })).toHaveValue('Submit report');
+    expect(screen.getByLabelText('Change status for Submit report')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Change status for Read chapter')).not.toBeInTheDocument();
+  });
 });

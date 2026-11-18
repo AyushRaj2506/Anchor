@@ -142,11 +142,14 @@ function Header({
       inputRef.current?.blur();
     }
     if (e.key === 'Enter' && query.trim()) {
-      saveRecent(query, recentKey);
-      // Navigate to library as a "view all" action
-      if (onNavigate) onNavigate(results.resources.length === 0 && results.tasks.length > 0 ? 'tasks' : 'library', query.trim());
-      setIsOpen(false);
+      handleViewAll();
     }
+  }
+
+  function handleViewAll() {
+    saveRecent(query, recentKey);
+    onNavigate?.(results.resources.length === 0 && results.tasks.length > 0 ? 'tasks' : 'library', query.trim());
+    setIsOpen(false);
   }
 
   function handleSelectResource(resource) {
@@ -325,11 +328,7 @@ function Header({
               {hasResults && (
                 <button
                   className="hsr-footer-btn"
-                  onClick={() => {
-                    saveRecent(query, recentKey);
-                    setIsOpen(false);
-                    if (onNavigate) onNavigate('library');
-                  }}
+                  onClick={handleViewAll}
                 >
                   View all results in {results.resources.length === 0 && results.tasks.length > 0 ? 'Tasks' : 'Library'} →
                 </button>

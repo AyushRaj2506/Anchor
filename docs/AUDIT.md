@@ -7,7 +7,7 @@ The code in `D:\Anchor` was audited against the linked deployment and verified l
 | Check | Result |
 | --- | --- |
 | Lint with warnings treated as errors | Passed |
-| Unit/regression suite | 130 tests passed across 14 files |
+| Unit/regression suite | 132 tests passed across 14 files |
 | Production build | Passed without the previous oversized-chunk warning |
 | Lockfile install simulation | `npm ci --dry-run --ignore-scripts --no-audit` passed |
 | Production dependency audit | 0 vulnerabilities |
@@ -65,6 +65,8 @@ Gemini quotas, provider outages, protected/JavaScript-rendered URLs, and the con
 ## Release status
 
 Production verification exposed `ERR_REQUIRE_ESM` during API startup: Firebase Admin's CommonJS `jwks-rsa` dependency requires the ESM-only `jose` package. This was reproduced locally by disabling Node's require-ESM support. Vercel disables that feature by default, so the documented `NODE_OPTIONS=--experimental-require-module` runtime setting is now tracked in `vercel.json`. CI checks real API imports after pruning development dependencies with the same runtime setting.
+
+The full integration workflow passed against `https://anchor-lime-two.vercel.app/` after that fix. An initial Gemini 503 during URL analysis was reported as a controlled error; a subsequent verification run passed all stages and cleaned up its synthetic account, documents, and file. A final browser check also found that the global search footer discarded the query and always opened Library; it now shares the Enter-key handler, with application-level tests for resource and task searches.
 
 The release targets the repository main branch and its connected Vercel production app. A release is complete only after confirming the Vercel deployment and a production verification run. Firebase rules changes also require a separate Firebase rules deployment if the legacy Storage rules are used.
 
