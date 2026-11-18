@@ -64,6 +64,8 @@ Gemini quotas, provider outages, protected/JavaScript-rendered URLs, and the con
 
 ## Release status
 
+Production verification exposed `ERR_REQUIRE_ESM` during API startup: Firebase Admin's CommonJS `jwks-rsa` dependency requires the ESM-only `jose` package. This was reproduced locally by disabling Node's require-ESM support. Vercel disables that feature by default, so the documented `NODE_OPTIONS=--experimental-require-module` runtime setting is now tracked in `vercel.json`. CI checks real API imports after pruning development dependencies with the same runtime setting.
+
 The release targets the repository main branch and its connected Vercel production app. A release is complete only after confirming the Vercel deployment and a production verification run. Firebase rules changes also require a separate Firebase rules deployment if the legacy Storage rules are used.
 
 Run `npm run dev` or use the currently running [production preview](http://localhost:5190/). For another live integration check, start the app and set `ANCHOR_TEST_URL` to its URL before running `npm run test:integration`.

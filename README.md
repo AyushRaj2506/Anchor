@@ -115,12 +115,13 @@ npm run lint
 npm test
 npm run coverage
 npm run build
+npm run check:api
 npm audit --omit=dev --audit-level=moderate
 ```
 
 `npm test` runs once and exits. Use `npm run test:watch` for watch mode. Coverage includes frontend code, API handlers, and shared server helpers.
 
-The regression suite covers authentication, account-switch races, failed saves, task creation/status, live statistics, malformed legacy data, unsafe links, knowledge retrieval, AI output validation, storage isolation, and URL network protections. GitHub Actions runs lint, tests, build, and the production dependency audit on Node.js 22 and 24.
+The regression suite covers authentication, account-switch races, failed saves, task creation/status, live statistics, malformed legacy data, unsafe links, knowledge retrieval, AI output validation, storage isolation, and URL network protections. GitHub Actions runs lint, tests, build, real API imports after pruning development dependencies, and the production dependency audit on Node.js 22 and 24.
 
 An opt-in live integration check is also available:
 
@@ -135,5 +136,7 @@ See [the audit report](docs/AUDIT.md) for verified results, remaining external l
 ## Deployment
 
 Vercel detects the Vite frontend and the `api/` serverless functions. Configure the server and client variables in Vercel, then deploy the reviewed changes. `vercel.json` sets AI function duration and security/no-cache headers.
+
+The non-secret runtime setting `NODE_OPTIONS=--experimental-require-module` is included in `vercel.json`. Firebase Admin's `jwks-rsa` dependency requires the ES module `jose`; Vercel disables this Node feature by default. Keep this setting when deploying, as described in [Vercel's Node configuration documentation](https://vercel.com/docs/functions/runtimes/node-js/advanced-node-configuration#experimental-nodejs-require-of-es-module). CI enables the same setting for its production API startup check.
 
 A local build or passing local integration check does not deploy changes to the linked production site. After deployment, rerun the integration check with `ANCHOR_TEST_URL` set to the deployed URL and verify the main browser flows.

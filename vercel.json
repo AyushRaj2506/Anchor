@@ -1,5 +1,8 @@
 {
   "framework": "vite",
+  "env": {
+    "NODE_OPTIONS": "--experimental-require-module"
+  },
   "functions": {
     "api/ai/*.js": { "maxDuration": 120 }
   },
