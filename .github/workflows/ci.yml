@@ -18,4 +18,6 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npm prune --omit=dev --ignore-scripts
+      - run: npm run check:api
       - run: npm audit --omit=dev --audit-level=moderate

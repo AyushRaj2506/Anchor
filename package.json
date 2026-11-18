@@ -11,7 +11,8 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:integration": "node scripts/integration.mjs --run"
+    "test:integration": "node scripts/integration.mjs --run",
+    "check:api": "node scripts/check-api-startup.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
