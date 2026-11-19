@@ -145,6 +145,10 @@ try {
     const extra = await db.from('tasks').delete().eq('user_id', uid).eq('id', 'audit-ai-task'); if (extra.error) cleaned = false;
     await db.auth.signOut();
   }
+  if (secondId) {
+    try { const removed = await storage.auth.admin.deleteUser(secondId); check(removed.error); }
+    catch { cleaned = false; console.error('Cleanup failed for synthetic isolation account.'); }
+  }
   if (created) {
     try { const removed = await storage.auth.admin.deleteUser(uid); check(removed.error); } catch { cleaned = false; console.error('Cleanup failed for temporary account:', uid); }
   }
