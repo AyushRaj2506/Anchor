@@ -3,8 +3,7 @@ import ResourceStats from '../components/ResourceStats';
 import ResourceFilters from '../components/ResourceFilters';
 import ResourceCard from '../components/ResourceCard';
 import { RESOURCE_TYPES } from '../data/libraryData';
-import { auth, db } from '../config/firebase';
-import { collection, doc } from 'firebase/firestore/lite';
+import { auth } from '../services/auth';
 import { uploadFile, deleteFile } from '../services/storage';
 import { analyzeResourceFile, analyzeResource, analyzeUrlResource } from '../services/ai';
 import './Library.css';
@@ -129,9 +128,8 @@ function Library({ user, initialSearch = '', resources, loading, error, onOpenRe
       try {
         idToken = await auth.currentUser.getIdToken();
         
-        // Generate pre-determined Firestore resource ID
-        const newDocRef = doc(collection(db, 'users', auth.currentUser.uid, 'resources'));
-        const resourceId = newDocRef.id;
+        // Generate pre-determined database resource ID
+        const resourceId = crypto.randomUUID();
 
         setUploadState('uploading');
         // Upload directly to Supabase via Vercel signed upload URL endpoint
@@ -140,7 +138,7 @@ function Library({ user, initialSearch = '', resources, loading, error, onOpenRe
         });
 
         setUploadState('saving');
-        // Create Firestore document
+        // Create database document
         await onAddResource({
           title: newTitle.trim(),
           sourceUrl: '',
@@ -249,7 +247,7 @@ function Library({ user, initialSearch = '', resources, loading, error, onOpenRe
       }
 
     } else {
-      // Normal Firestore-only flow (Notes, Documents, URLs, or any resource in Demo Mode)
+      // Normal database-only flow (Notes, Documents, URLs, or any resource in Demo Mode)
       if (onAddResource) {
         try {
           setUploadState('saving');
@@ -398,7 +396,7 @@ function Library({ user, initialSearch = '', resources, loading, error, onOpenRe
     } else if (sort === 'oldest') {
       results = [...results].reverse();
     }
-    // 'newest' = original order (data is already newest-first from Firestore orderBy)
+    // 'newest' = original order (data is already newest-first from database orderBy)
 
     return results;
   }, [resources, search, category, type, sort]);

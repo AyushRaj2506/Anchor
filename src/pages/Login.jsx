@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { signIn, sendPasswordReset, auth } from '../services/auth';
 import './Login.css';
 
 /**
@@ -38,11 +37,11 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
       setLoading(true);
       try {
         if (!auth) throw new Error('Authentication is not configured.');
-        await signInWithEmailAndPassword(auth, email.trim(), password);
-        // Navigation will be handled automatically by onAuthStateChanged in App.jsx
+        await signIn(email.trim(), password);
+        // Navigation will be handled automatically by the auth listener in App.jsx
       } catch (err) {
         let authErr = 'Invalid email or password.';
-        if (err.code === 'auth/network-request-failed') {
+        if (err.name === 'AuthRetryableFetchError') {
           authErr = 'Unable to connect to the authentication service. Please try again.';
         }
         if (!auth) authErr = 'Sign-in is not configured. You can explore the demo account.';
@@ -65,11 +64,10 @@ function Login({ onSwitchView, theme, onToggleTheme }) {
     setResetMessage('');
     try {
       if (!auth) throw new Error('Authentication is not configured.');
-      await sendPasswordResetEmail(auth, email.trim());
+      await sendPasswordReset(email.trim());
       setResetMessage('If an account exists for this email, a password reset link has been sent.');
-    } catch (error) {
-      if (error.code === 'auth/user-not-found') setResetMessage('If an account exists for this email, a password reset link has been sent.');
-      else setErrors({ auth: 'Could not send a reset link. Please try again later.' });
+    } catch {
+      setErrors({ auth: 'Could not send a reset link. Please try again later.' });
     } finally { setLoading(false); }
   }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { searchKnowledge } from '../services/relevance';
 import { askQuestion } from '../services/ai';
-import { auth } from '../config/firebase';
+import { auth } from '../services/auth';
 import './AskMyKnowledge.css';
 
 /**

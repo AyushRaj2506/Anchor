@@ -20,6 +20,4 @@ jobs:
       - run: npm run build
       - run: npm prune --omit=dev --ignore-scripts
       - run: npm run check:api
-        env:
-          NODE_OPTIONS: --experimental-require-module
       - run: npm audit --omit=dev --audit-level=moderate

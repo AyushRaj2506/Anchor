@@ -2,13 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ generate: vi.fn(), download: vi.fn(), signedUpload: vi.fn(), signedDownload: vi.fn(), remove: vi.fn() }));
-vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], cert: vi.fn(), initializeApp: vi.fn() }));
-vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: async token => {
-  if (token !== 'valid-token') throw new Error('Invalid token');
-  return { uid: 'user-1' };
-} }) }));
 vi.mock('../../../server/clients.js', async importOriginal => ({ ...await importOriginal(), generateAIContent: mocks.generate }));
-vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ storage: { from: () => ({
+vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ auth: { getUser: async token => token === 'valid-token' ? { data: { user: { id: 'user-1' } }, error: null } : { data: { user: null }, error: { status: 401 } } }, storage: { from: () => ({
   download: mocks.download, createSignedUploadUrl: mocks.signedUpload,
   createSignedUrl: mocks.signedDownload, remove: mocks.remove,
 }) } }) }));
@@ -34,6 +29,7 @@ beforeEach(() => {
   vi.stubEnv('GEMINI_API_KEY', 'test-key');
   vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-key');
+  vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test-public-key');
   mocks.generate.mockResolvedValue({ text: JSON.stringify({ summary: 'Grounded summary', contentText: 'Real document content', actionItems: [] }) });
   mocks.signedUpload.mockResolvedValue({ data: { signedUrl: 'https://example.supabase.co/upload' } });
   mocks.signedDownload.mockResolvedValue({ data: { signedUrl: 'https://example.supabase.co/download' } });
@@ -61,9 +57,7 @@ describe('API authentication and request handling', () => {
     vi.stubEnv('GEMINI_API_KEY', '');
     expect((await call(analyze, { text: 'Study this document.' })).code).toBe(503);
   });
-  it('keeps text analysis independent of storage configuration', async () => {
-    vi.stubEnv('SUPABASE_URL', '');
-    vi.stubEnv('VITE_SUPABASE_URL', '');
+  it('keeps text analysis independent of privileged storage credentials', async () => {
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
     expect((await call(analyze, { text: 'Study this document.' })).code).toBe(200);
   });

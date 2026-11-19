@@ -2,12 +2,12 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const state = vi.hoisted(() => ({ listener: null, initial: null, auth: { currentUser: null }, resources: vi.fn(), tasks: vi.fn(), updateTask: vi.fn() }));
-vi.mock('../../config/firebase', () => ({ auth: state.auth, db: {} }));
-vi.mock('firebase/auth', () => ({
-  onAuthStateChanged: (_auth, listener) => { state.listener = listener; queueMicrotask(() => state.listener?.(state.initial)); return () => { state.listener = null; }; },
+vi.mock('../../services/auth', () => ({
+  auth: state.auth,
+  subscribeAuth: (listener) => { state.listener = listener; queueMicrotask(() => state.listener?.(state.initial)); return () => { state.listener = null; }; },
   signOut: vi.fn(async () => state.listener?.(null)),
 }));
-vi.mock('../../services/firestore', () => ({
+vi.mock('../../services/database', () => ({
   getResources: state.resources, getTasks: state.tasks, updateTask: state.updateTask,
   addResource: vi.fn(), updateResource: vi.fn(), deleteResource: vi.fn(),
   addTask: vi.fn(), deleteTask: vi.fn(), addAnalysisTask: vi.fn(),

@@ -3,11 +3,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import dotenv from 'dotenv';
-import { initializeApp as initializeAdmin, cert, deleteApp as deleteAdmin } from 'firebase-admin/app';
-import { getAuth as getAdminAuth } from 'firebase-admin/auth';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signOut } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, getDocs, collection, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore/lite';
 import { createClient } from '@supabase/supabase-js';
 
 if (!process.argv.includes('--run')) {
@@ -16,20 +11,22 @@ if (!process.argv.includes('--run')) {
 }
 dotenv.config({ path: ['.env.local', '.env'], quiet: true });
 const base = process.env.ANCHOR_TEST_URL || 'http://localhost:5173';
-const uid = 'anchor-audit-' + randomUUID();
-const admin = initializeAdmin({ credential: cert({
-  projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID,
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-}) }, uid);
-const app = initializeApp({ apiKey: process.env.VITE_FIREBASE_API_KEY, projectId: process.env.VITE_FIREBASE_PROJECT_ID, appId: process.env.VITE_FIREBASE_APP_ID }, uid);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = createClient(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const adminAuth = getAdminAuth(admin);
-const resourceRef = doc(db, 'users', uid, 'resources', 'audit-note');
-const taskRef = doc(db, 'users', uid, 'tasks', 'audit-task');
+const uid = randomUUID();
+const password = 'Anchor-Audit-' + randomUUID();
+const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const storage = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+const db = createClient(url, process.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+const resourceRef = { id: 'audit-note', path: 'resources/audit-note' };
+const taskRef = { id: 'audit-task', path: 'tasks/audit-task' };
+function tableFor(ref) { return ref === resourceRef ? 'resources' : 'tasks'; }
+function check(error) { if (error) throw error; }
+async function setDoc(ref, value) { const { error } = await db.from(tableFor(ref)).insert({ user_id: uid, id: ref.id, data: value }); check(error); }
+async function updateDoc(ref, value) { const { error } = await db.rpc('anchor_update_record', { record_kind: tableFor(ref), record_id: ref.id, owner_id: uid, patch: value }); check(error); }
+async function getDoc(ref) { const { data, error } = await db.from(tableFor(ref)).select('data').eq('user_id', uid).eq('id', ref.id).single(); check(error); return { data: () => data.data }; }
+async function deleteDoc(ref) { const { error } = await db.from(tableFor(ref)).delete().eq('user_id', uid).eq('id', ref.id); check(error); }
+const serverTimestamp = () => new Date().toISOString();
 let created = false;
+let secondId = null;
 let storagePath;
 let token;
 let cleaned = true;
@@ -59,19 +56,36 @@ function pdf(text) {
 }
 
 try {
-  await adminAuth.createUser({ uid });
+  const account = await storage.auth.admin.createUser({ id: uid, email: 'anchor-audit-' + uid + '@example.com', password, email_confirm: true }); check(account.error);
   created = true;
-  await signInWithCustomToken(auth, await adminAuth.createCustomToken(uid));
-  token = await auth.currentUser.getIdToken();
-  console.log('PASS Firebase authentication');
+  const login = await db.auth.signInWithPassword({ email: 'anchor-audit-' + uid + '@example.com', password }); check(login.error);
+  token = login.data.session.access_token;
+  console.log('PASS Supabase password authentication');
   await api('/api/ai/analyze', { text: 'Test' }, 401, false);
   const content = 'Anchor integration test. Submit the integration report by December 15, 2026.';
   const resource = { title: 'Integration test note', type: 'Note', category: 'Testing', tags: ['audit'], content, bookmarked: false };
   await setDoc(resourceRef, { ...resource, createdAt: serverTimestamp() });
   await updateDoc(resourceRef, { bookmarked: true });
   assert.equal((await getDoc(resourceRef)).data().bookmarked, true);
-  assert.equal((await getDocs(collection(db, 'users', uid, 'resources'))).size, 1);
-  console.log('PASS Firestore create/read/update and user-scoped queries');
+  const listed = await db.from('resources').select('id').eq('user_id', uid); check(listed.error); assert.equal(listed.data.length, 1);
+  const anonymous = createClient(url, process.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+  const denied = await anonymous.from('resources').select('id'); assert.ok(denied.error || denied.data.length === 0);
+  const forged = await db.from('tasks').insert({ user_id: randomUUID(), id: 'forged', data: {} }); assert.ok(forged.error, 'RLS must reject writes to another user');
+  await Promise.all([updateDoc(resourceRef, { concurrentA: true }), updateDoc(resourceRef, { concurrentB: true })]);
+  const merged = (await getDoc(resourceRef)).data(); assert.ok(merged.concurrentA && merged.concurrentB);
+  const second = await storage.auth.admin.createUser({ email: 'anchor-isolation-' + uid + '@example.com', password, email_confirm: true }); check(second.error); secondId = second.data.user.id;
+  const other = createClient(url, process.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  check((await other.auth.signInWithPassword({ email: 'anchor-isolation-' + uid + '@example.com', password })).error);
+  check((await other.from('resources').insert({ user_id: secondId, id: resourceRef.id, data: { title: 'Isolation fixture' } })).error);
+  const crossRead = await db.from('resources').select('id').eq('user_id', secondId); check(crossRead.error); assert.equal(crossRead.data.length, 0);
+  const staleUpdate = await db.rpc('anchor_update_record', { record_kind: 'resources', record_id: resourceRef.id, owner_id: secondId, patch: { title: 'Unauthorized' } }); assert.ok(staleUpdate.error);
+  const crossDelete = await other.from('resources').delete().eq('user_id', uid).eq('id', resourceRef.id); check(crossDelete.error);
+  assert.equal((await getDoc(resourceRef)).data().title, resource.title);
+  const attempts = await Promise.all(Array.from({ length: 3 }, () => db.from('tasks').upsert({ user_id: uid, id: 'audit-ai-task', data: { title: 'One generated task', status: 'todo' } }, { onConflict: 'user_id,id', ignoreDuplicates: true }).select('id')));
+  attempts.forEach(result => check(result.error)); assert.equal(attempts.reduce((n, result) => n + result.data.length, 0), 1);
+  await other.auth.signOut();
+  console.log('PASS cross-account read/write/delete denial, session-owner guard, concurrent merge and task deduplication');
+  console.log('PASS Postgres CRUD, atomic merge and RLS ownership');
   const analysis = await api('/api/ai/analyze', { resource });
   assert.equal(typeof analysis.summary, 'string');
   assert.ok(analysis.actionItems.length > 0);
@@ -107,6 +121,14 @@ try {
   await api('/api/storage/delete-file', { storagePath });
   storagePath = null;
   console.log('PASS authenticated file deletion');
+  const recoveryRedirect = new URL('/?recovery=1', base).href;
+  const recovery = await storage.auth.admin.generateLink({ type: 'recovery', email: 'anchor-audit-' + uid + '@example.com', options: { redirectTo: recoveryRedirect } }); check(recovery.error);
+  assert.equal(new URL(recovery.data.properties.action_link).searchParams.get('redirect_to'), recoveryRedirect, 'Supabase must allow the application recovery callback');
+  const recovering = createClient(url, process.env.VITE_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  check((await recovering.auth.verifyOtp({ token_hash: recovery.data.properties.hashed_token, type: 'recovery' })).error);
+  const nextPassword = 'Anchor-Recovered-' + randomUUID(); check((await recovering.auth.updateUser({ password: nextPassword })).error);
+  check((await recovering.auth.signInWithPassword({ email: 'anchor-audit-' + uid + '@example.com', password: nextPassword })).error);
+  await recovering.auth.signOut(); console.log('PASS Supabase recovery token and new-password sign-in (no email sent)');
 } catch (error) {
   // Assertion text never includes credentials or tokens.
   console.error('FAIL integration check:', error.message);
@@ -116,16 +138,16 @@ try {
     const { error } = await storage.storage.from('anchor-resources').remove([storagePath]);
     if (error) { cleaned = false; console.error('Cleanup failed for temporary test file:', storagePath); }
   }
-  if (auth.currentUser) {
+  if (created) {
     for (const ref of [resourceRef, taskRef]) {
       try { await deleteDoc(ref); } catch { cleaned = false; console.error('Cleanup failed for temporary document:', ref.path); }
     }
-    await signOut(auth);
+    const extra = await db.from('tasks').delete().eq('user_id', uid).eq('id', 'audit-ai-task'); if (extra.error) cleaned = false;
+    await db.auth.signOut();
   }
   if (created) {
-    try { await adminAuth.deleteUser(uid); } catch { cleaned = false; console.error('Cleanup failed for temporary account:', uid); }
+    try { const removed = await storage.auth.admin.deleteUser(uid); check(removed.error); } catch { cleaned = false; console.error('Cleanup failed for temporary account:', uid); }
   }
-  await Promise.all([deleteApp(app), deleteAdmin(admin)]);
   if (cleaned) console.log('PASS temporary test data and account cleaned up');
   else process.exitCode = 1;
 }

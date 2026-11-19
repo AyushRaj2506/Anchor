@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { signUp, auth } from '../services/auth';
 import './Signup.css';
 
 /**
@@ -15,6 +14,7 @@ function Signup({ onSwitchView, theme, onToggleTheme, onProfileUpdated }) {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
   // Dynamic Password Validation Checklist indicators
   const [checks, setChecks] = useState({
@@ -73,15 +73,15 @@ function Signup({ onSwitchView, theme, onToggleTheme, onProfileUpdated }) {
       setLoading(true);
       try {
         if (!auth) throw new Error('Authentication is not configured.');
-        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        await updateProfile(userCredential.user, { displayName: fullName.trim() });
+        const result = await signUp(email.trim(), password, fullName.trim());
+        if (!result.session) setMessage('Check your email to confirm your account, then log in.');
         onProfileUpdated?.(fullName.trim());
-        // Navigation handled by onAuthStateChanged in App.jsx
+        // Navigation handled by the auth listener in App.jsx
       } catch (err) {
         let authErr = 'Failed to create account.';
-        if (err.code === 'auth/email-already-in-use') authErr = 'This email is already registered. Try logging in instead.';
-        if (err.code === 'auth/weak-password') authErr = 'Password is too weak.';
-        if (err.code === 'auth/network-request-failed') authErr = 'Unable to connect to the authentication service. Please try again.';
+        if (err.code === 'user_already_exists') authErr = 'This email is already registered. Try logging in instead.';
+        if (err.code === 'weak_password') authErr = 'Password is too weak.';
+        if (err.name === 'AuthRetryableFetchError') authErr = 'Unable to connect to the authentication service. Please try again.';
         if (!auth) authErr = 'Registration is not configured. You can explore the demo account.';
         setErrors({ auth: authErr });
       } finally {
@@ -309,6 +309,7 @@ function Signup({ onSwitchView, theme, onToggleTheme, onProfileUpdated }) {
               )}
             </div>
 
+            {message && <p role="status">{message}</p>}
             <button type="submit" className="auth-submit-btn" disabled={loading}>
               {loading ? 'Creating account...' : 'Create account'}
             </button>

@@ -1,6 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
 let storageClient;
+let authClient;
+
+export function getAuthClient() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Authentication is temporarily unavailable.');
+  authClient ??= createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (input, options = {}) => fetch(input, { ...options,
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000) }) },
+  });
+  return authClient;
+}
 
 export function getStorageClient() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;

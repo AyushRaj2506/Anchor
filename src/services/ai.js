@@ -54,7 +54,7 @@ export async function analyzeResource(resource, idToken) {
  * server-side and passes it to Gemini for deep document analysis.
  *
  * @param {{ resourceId: string, storagePath: string, fileType: string, fileName: string }} params
- * @param {string} idToken - Firebase ID token for authentication
+ * @param {string} idToken - Supabase access token for authentication
  * @returns {Promise<Object>} Rich analysis including contentText, actionItems, deadlines, etc.
  */
 export async function analyzeResourceFile({ resourceId, storagePath, fileType, fileName }, idToken) {

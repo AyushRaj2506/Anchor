@@ -5,8 +5,7 @@ import Library from '../../pages/Library';
 import Login from '../../pages/Login';
 
 const { login, reset } = vi.hoisted(() => ({ login: vi.fn(), reset: vi.fn() }));
-vi.mock('firebase/auth', () => ({ signInWithEmailAndPassword: login, sendPasswordResetEmail: reset }));
-vi.mock('../../config/firebase', () => ({ auth: { currentUser: null }, db: {} }));
+vi.mock('../../services/auth', () => ({ auth: { currentUser: null }, signIn: login, sendPasswordReset: reset }));
 
 beforeEach(() => { vi.clearAllMocks(); });
 
@@ -75,16 +74,16 @@ describe('Authentication regressions', () => {
     render(<Login />);
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'student@example.com' } });
     fireEvent.click(screen.getByText('Forgot password?'));
-    expect(reset).toHaveBeenCalledWith(expect.any(Object), 'student@example.com');
+    expect(reset).toHaveBeenCalledWith('student@example.com');
     expect(await screen.findByRole('status')).toHaveTextContent('password reset link');
   });
 
-  it('does not lock existing Firebase users out due to a new signup password policy', async () => {
+  it('does not lock existing users out due to a new signup password policy', async () => {
     login.mockResolvedValue();
     render(<Login />);
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'student@example.com' } });
     fireEvent.change(screen.getByLabelText('Password', { exact: true }), { target: { value: 'abc123' } });
     fireEvent.click(screen.getByRole('button', { name: 'Log in', exact: true }));
-    await waitFor(() => expect(login).toHaveBeenCalledWith(expect.any(Object), 'student@example.com', 'abc123'));
+    await waitFor(() => expect(login).toHaveBeenCalledWith('student@example.com', 'abc123'));
   });
 });

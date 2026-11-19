@@ -1,3 +1,5 @@
+> Historical audit of the earlier Firebase/Supabase release. The current Supabase-only design and migration evidence are documented in [SUPABASE_MIGRATION.md](SUPABASE_MIGRATION.md).
+
 # Anchor audit and fixes — 18 November 2026
 
 The code in `D:\Anchor` was audited against the linked deployment and verified locally against the configured live Firebase, Supabase, and Gemini services. The owner authorized publishing the verified changes to GitHub and the connected Vercel production project on 18 November 2026.

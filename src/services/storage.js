@@ -3,7 +3,7 @@
  *
  * Frontend service to authorize, upload, download, and delete
  * private files (PDFs and Images) using Supabase Storage.
- * Firebase ID tokens are passed as Bearer authorization.
+ * Supabase access tokens are passed as Bearer authorization.
  */
 
 /**
@@ -38,7 +38,7 @@ async function fetchStorage(endpoint, payload, idToken) {
  * 
  * @param {File} file - Browser File object
  * @param {string} resourceId - Unique resource ID
- * @param {string} idToken - Firebase ID token
+ * @param {string} idToken - Supabase access token
  * @param {Function} onProgress - Progress callback (percent 0-100)
  * @returns {Promise<string>} - Resolves with the storagePath on success
  */
@@ -70,7 +70,7 @@ export async function uploadFile(file, resourceId, idToken, onProgress = () => {
  * Fetches a time-limited signed URL to view/download a private file.
  * 
  * @param {string} storagePath - The full path of the file in the bucket
- * @param {string} idToken - Firebase ID token
+ * @param {string} idToken - Supabase access token
  * @returns {Promise<string>} - Resolves with the signed download URL
  */
 export async function getDownloadUrl(storagePath, idToken, download = false) {
@@ -82,7 +82,7 @@ export async function getDownloadUrl(storagePath, idToken, download = false) {
  * Deletes a file from Supabase storage.
  * 
  * @param {string} storagePath - The full path of the file in the bucket
- * @param {string} idToken - Firebase ID token
+ * @param {string} idToken - Supabase access token
  * @returns {Promise<void>}
  */
 export async function deleteFile(storagePath, idToken) {

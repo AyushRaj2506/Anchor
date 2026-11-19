@@ -14,10 +14,9 @@ const Signup = lazy(() => import('./pages/Signup'));
 const DemoAccount = lazy(() => import('./pages/DemoAccount'));
 import { LIBRARY_RESOURCES } from './data/libraryData';
 import { TASKS } from './data/taskData';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './config/firebase';
-import { getResources, addResource, updateResource, deleteResource, getTasks, addTask, updateTask, deleteTask, addAnalysisTask } from './services/firestore';
-import { serverTimestamp } from 'firebase/firestore/lite';
+import { subscribeAuth, signOut, auth } from './services/auth';
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+import { getResources, addResource, updateResource, deleteResource, getTasks, addTask, updateTask, deleteTask, addAnalysisTask } from './services/database';
 import { deleteFile } from './services/storage';
 import './App.css';
 import { readJSON, writeJSON } from './utils/persistence';
@@ -35,8 +34,8 @@ import { parseTaskDeadline, taskTitleKey } from './utils/tasks';
  *   selectedResource — the resource object to show on the Resource Details page
  *                      (null when no resource is selected)
  *   resources        — shared resources collection state (holds bookmark toggles)
- *   resourceError    — error message if Firestore resource load fails
- *   taskError        — error message if Firestore task load fails
+ *   resourceError    — error message if Database resource load fails
+ *   taskError        — error message if Database task load fails
  */
 function App() {
   // ── Authentication State Persistence ──
@@ -51,6 +50,7 @@ function App() {
     catch { return 'light'; }
   });
 
+  const [passwordRecovery, setPasswordRecovery] = useState(() => new URLSearchParams(window.location.search).get('recovery') === '1');
   const [authView, setAuthView]               = useState('login');
   const [activePage, setActivePage]           = useState('dashboard');
   const [sidebarOpen, setSidebarOpen]         = useState(false);
@@ -86,23 +86,23 @@ function App() {
     taskCreationLocks.current.clear();
   }, [sessionKey]);
 
-  // ── Firebase Auth Listener ──
+  // ── Supabase Auth Listener ──
   useEffect(() => {
     if (!auth) { setLoadingAuth(false); return; }
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = subscribeAuth((account) => {
       const savedDemo = readJSON('anchor-user');
-      const nextSession = firebaseUser?.uid || (savedDemo?.isDemo === true ? 'demo' : null);
+      const nextSession = account?.uid || (savedDemo?.isDemo === true ? 'demo' : null);
       if (nextSession !== sessionRef.current) {
         setResources([]);
         setTasks([]);
         setSelectedResource(null);
         setActivePage('dashboard');
       }
-      if (firebaseUser) {
+      if (account) {
         setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          uid: account.uid,
+          email: account.email,
+          name: account.displayName || account.email?.split('@')[0] || 'User',
           isDemo: false
         });
       } else {
@@ -114,7 +114,7 @@ function App() {
       setLoadingAuth(false);
       setUser(null);
       setOperationError('Could not restore your session. Please sign in again.');
-    });
+    }, () => setPasswordRecovery(true));
 
     return () => unsubscribe();
   }, []);
@@ -130,7 +130,7 @@ function App() {
     writeJSON('anchor-sidebar-collapsed', sidebarCollapsed);
   }, [sidebarCollapsed]);
 
-  // ── Firestore Resources Synchronization ──
+  // ── Database Resources Synchronization ──
   useEffect(() => {
     if (!uid && !isDemo) {
       setResources([]);
@@ -147,7 +147,7 @@ function App() {
 
     let active = true;
     setResources([]);
-    async function loadFirestoreResources() {
+    async function loadDatabaseResources() {
       setLoadingResources(true);
       setResourceError(null);
       try {
@@ -165,11 +165,11 @@ function App() {
       }
     }
 
-    loadFirestoreResources();
+    loadDatabaseResources();
     return () => { active = false; };
   }, [uid, isDemo]);
 
-  // ── Firestore Tasks Synchronization ──
+  // ── Database Tasks Synchronization ──
   useEffect(() => {
     if (!uid && !isDemo) {
       setTasks([]);
@@ -186,7 +186,7 @@ function App() {
 
     let active = true;
     setTasks([]);
-    async function loadFirestoreTasks() {
+    async function loadDatabaseTasks() {
       setLoadingTasks(true);
       setTaskError(null);
       try {
@@ -203,7 +203,7 @@ function App() {
       }
     }
 
-    loadFirestoreTasks();
+    loadDatabaseTasks();
     return () => { active = false; };
   }, [uid, isDemo]);
 
@@ -211,7 +211,7 @@ function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }
 
-  // Firebase login/signup are handled inside their respective components now.
+  // Supabase login/signup are handled inside their respective components now.
   // We only need to handle Demo Login here.
 
   function handleDemoLogin() {
@@ -234,7 +234,7 @@ function App() {
     } else {
       try {
         writeJSON('anchor-user', null);
-        await signOut(auth);
+        await signOut();
       } catch (err) {
         console.error('Logout failed:', err);
         setOperationError('Could not log out. Please try again.');
@@ -293,7 +293,7 @@ function App() {
     const saved = { ...updates };
     const local = { ...updates };
     if (updates.aiSummary !== undefined) {
-      saved.aiAnalyzedAt = serverTimestamp();
+      saved.aiAnalyzedAt = new Date().toISOString();
       local.aiAnalyzedAt = new Date();
     }
     if (!user.isDemo) await updateResource(user.uid, resourceId, saved);
@@ -524,6 +524,10 @@ function App() {
       </div>
     );
   }
+
+  if (passwordRecovery) return <Suspense fallback={<p>Loading...</p>}><ResetPassword onComplete={() => {
+    setPasswordRecovery(false); window.history.replaceState({}, '', window.location.pathname);
+  }} /></Suspense>;
 
   if (!user) {
     return (

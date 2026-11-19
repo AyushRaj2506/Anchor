@@ -1,36 +1,22 @@
-import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { getAuthClient } from './clients.js';
 
 export async function verifyAuth(req) {
   const header = req.headers?.authorization;
   const token = typeof header === 'string' && /^Bearer\s+(\S+)$/i.exec(header)?.[1];
   if (!token) throw new Error('UNAUTHORIZED');
 
-  if (!getApps().length) {
-    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-    if (!projectId || !clientEmail || !privateKey) {
-      const error = new Error('Authentication service is temporarily unavailable.');
-      error.status = 503;
-      throw error;
-    }
-    try {
-      initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
-    } catch {
-      const error = new Error('Authentication service is temporarily unavailable.');
-      error.status = 503;
-      throw error;
-    }
+  let client;
+  try { client = getAuthClient(); } catch {
+    throw Object.assign(new Error('Authentication service is temporarily unavailable.'), { status: 503 });
   }
-
-  try {
-    const decoded = await getAuth().verifyIdToken(token);
-    if (!decoded?.uid) throw new Error('UNAUTHORIZED');
-    return decoded;
-  } catch {
+  const { data, error } = await client.auth.getUser(token);
+  if (error || !data.user?.id) {
+    if (error?.status >= 500 || error?.name === 'AuthRetryableFetchError') {
+      throw Object.assign(new Error('Authentication service is temporarily unavailable.'), { status: 503 });
+    }
     throw new Error('UNAUTHORIZED');
   }
+  return { uid: data.user.id, email: data.user.email };
 }
 
 export async function requireAuth(req, res) {

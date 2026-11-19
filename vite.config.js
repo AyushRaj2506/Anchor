@@ -55,6 +55,7 @@ const localApiPlugin = () => ({
 export default defineConfig({
   plugins: [react(), localApiPlugin()],
   test: {
+    maxWorkers: 4,
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/__tests__/setup.js'],

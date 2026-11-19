@@ -2,23 +2,23 @@ import React, { useState, useEffect } from 'react';
 import './ResourceDetails.css';
 import { safeWebUrl } from '../utils/url';
 import { analyzeResource, analyzeResourceFile, analyzeUrlResource } from '../services/ai';
-import { auth } from '../config/firebase';
+import { auth } from '../services/auth';
 import { getDownloadUrl } from '../services/storage';
 
 /**
  * ResourceDetails — shows full information for a single resource.
  *
  * Props:
- *   resource         — the resource object from Firestore (passed from Library/App)
+ *   resource         — the resource object from database (passed from Library/App)
  *   onBack           — function to call when "← Back to Library" is clicked
- *   onToggleBookmark — function(resourceId) to toggle bookmark state (persists to Firestore)
+ *   onToggleBookmark — function(resourceId) to toggle bookmark state (persists to database)
  *   onDeleteResource — function(resourceId) to delete this resource
  *   onUpdateResource — function(resourceId, updates) to persist AI analysis results
  *   onNavigate       — function(pageId) to navigate between pages
  *
  * How it works:
  *   - Shows data from the resource object itself (title, category, type, tags, description, sourceUrl)
- *   - For real Firestore resources, fields like description may not exist — graceful fallbacks shown
+ *   - For real database resources, fields like description may not exist — graceful fallbacks shown
  *   - Action items are local UI state only (future milestone for persistence)
  *   - Document preview is a styled CSS placeholder — no PDF library in scope
  */
@@ -119,7 +119,7 @@ function ResourceDetails({ user, resource, onBack, onToggleBookmark, onDeleteRes
         result = await analyzeResource(resource, await auth.currentUser.getIdToken());
       }
 
-      // Persist AI results to Firestore
+      // Persist AI results to database
       try {
         if (onUpdateResource) {
           await onUpdateResource(id, {
@@ -135,9 +135,9 @@ function ResourceDetails({ user, resource, onBack, onToggleBookmark, onDeleteRes
             deadlines:             result.deadlines ?? [],
           });
         }
-      } catch (firestoreError) {
-        console.error('Firestore save failed:', firestoreError);
-        throw new Error('FIRESTORE_SAVE_FAILED');
+      } catch (saveError) {
+        console.error('database save failed:', saveError);
+        throw new Error('RESOURCE_SAVE_FAILED');
       }
 
       // Auto-create tasks from action items
@@ -166,7 +166,7 @@ function ResourceDetails({ user, resource, onBack, onToggleBookmark, onDeleteRes
 
     } catch (err) {
       console.error('AI Analysis failed:', err);
-      if (err.message === 'FIRESTORE_SAVE_FAILED') {
+      if (err.message === 'RESOURCE_SAVE_FAILED') {
         setAiError('AI analysis completed, but it could not be saved. Please try again.');
       } else {
         setAiError(err.message || 'AI analysis is temporarily unavailable. Please try again.');
@@ -195,7 +195,7 @@ function ResourceDetails({ user, resource, onBack, onToggleBookmark, onDeleteRes
   function formatDate(ts) {
     if (!ts) return '—';
     try {
-      // Firestore Timestamp has .toDate(), Date objects work directly
+      // database Timestamp has .toDate(), Date objects work directly
       const d = ts.toDate ? ts.toDate() : new Date(ts);
       return d.toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric',
@@ -241,7 +241,7 @@ function ResourceDetails({ user, resource, onBack, onToggleBookmark, onDeleteRes
             {analyzing ? '⏳ Analyzing...' : aiSummary ? '✨ Re-analyze' : '✨ Analyze with AI'}
           </button>
 
-          {/* Bookmark — fully functional, persists to Firestore */}
+          {/* Bookmark — fully functional, persists to database */}
           <button
             className={`rd-action-btn ${bookmarked ? 'rd-action-btn--active' : ''} ${bookmarkPopping ? 'icon-pop' : ''}`}
             aria-label={bookmarked ? 'Remove bookmark for this resource' : 'Bookmark this resource'}
