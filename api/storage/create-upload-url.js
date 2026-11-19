@@ -20,6 +20,8 @@ export default async function handler(req, res) {
   }
   try {
     const storagePath = user.uid + '/' + resourceId + '/' + randomUUID() + path.extname(fileName).toLowerCase();
+    const tracked = await getStorageClient().rpc('anchor_register_upload', { object_path: storagePath, owner_id: user.uid, resource_id: resourceId, mime_type: fileType, expected_size: fileSize });
+    if (tracked.error) throw tracked.error;
     const { data, error } = await getStorageClient().storage.from('anchor-resources').createSignedUploadUrl(storagePath);
     if (error || !data?.signedUrl) throw new Error('Upload failed.');
     return res.status(200).json({ success: true, data: { signedUrl: data.signedUrl, path: storagePath } });

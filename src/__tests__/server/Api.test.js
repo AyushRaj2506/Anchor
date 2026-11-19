@@ -1,12 +1,15 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ generate: vi.fn(), download: vi.fn(), signedUpload: vi.fn(), signedDownload: vi.fn(), remove: vi.fn() }));
+const mocks = vi.hoisted(() => ({ knowledge: vi.fn(), generate: vi.fn(), download: vi.fn(), signedUpload: vi.fn(), signedDownload: vi.fn(), remove: vi.fn() }));
 vi.mock('../../../server/clients.js', async importOriginal => ({ ...await importOriginal(), generateAIContent: mocks.generate }));
-vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ auth: { getUser: async token => token === 'valid-token' ? { data: { user: { id: 'user-1' } }, error: null } : { data: { user: null }, error: { status: 401 } } }, storage: { from: () => ({
+vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ rpc: async () => ({ error: null }), auth: { getUser: async token => token === 'valid-token' ? { data: { user: { id: 'user-1' } }, error: null } : { data: { user: null }, error: { status: 401 } } }, storage: { from: () => ({
   download: mocks.download, createSignedUploadUrl: mocks.signedUpload,
   createSignedUrl: mocks.signedDownload, remove: mocks.remove,
 }) } }) }));
+
+vi.mock('../../../server/usage.js', async original => ({ ...await original(), requireAIBudget: async () => true }));
+vi.mock('../../../server/knowledge.js', () => ({ loadKnowledge: mocks.knowledge }));
 
 import analyze from '../../../api/ai/analyze.js';
 import analyzeUrl from '../../../api/ai/analyze-url.js';
@@ -30,6 +33,7 @@ beforeEach(() => {
   vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-key');
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'test-public-key');
+  mocks.knowledge.mockResolvedValue({ resources: [{ id: 'real', title: 'Actual title', content: 'Notes' }], tasks: [] });
   mocks.generate.mockResolvedValue({ text: JSON.stringify({ summary: 'Grounded summary', contentText: 'Real document content', actionItems: [] }) });
   mocks.signedUpload.mockResolvedValue({ data: { signedUrl: 'https://example.supabase.co/upload' } });
   mocks.signedDownload.mockResolvedValue({ data: { signedUrl: 'https://example.supabase.co/download' } });
@@ -64,6 +68,12 @@ describe('API authentication and request handling', () => {
 });
 
 describe('Storage isolation', () => {
+  it('ignores forged browser knowledge text and uses stored evidence', async () => {
+    await call(ask, { question: 'Question?', context: { resources: [{ id: 'fake', title: 'Fake', content: 'FORGED_CLIENT_EVIDENCE' }], tasks: [] } });
+    const prompt = JSON.stringify(mocks.generate.mock.calls[0]);
+    expect(prompt).toContain('Actual title');
+    expect(prompt).not.toContain('FORGED_CLIENT_EVIDENCE');
+  });
   it.each(['user-2/resource/file.pdf', 'user-1/../user-2/file.pdf', 'user-1/%2e%2e/file.pdf', 'user-1/dir\\..\\file.pdf', 'user-1//file.pdf'])('rejects unauthorized or ambiguous paths: %s', async storagePath => {
     expect((await call(download, { storagePath })).code).toBe(403);
     expect((await call(remove, { storagePath })).code).toBe(403);

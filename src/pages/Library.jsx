@@ -195,6 +195,7 @@ function Library({ user, initialSearch = '', resources, loading, error, onOpenRe
 
             if (onUpdateResource) {
               await onUpdateResource(capturedResourceId, {
+                _serverSaved: result._persisted,
                 aiSummary:              result.summary,
                 aiCategory:             result.category,
                 aiTags:                 result.tags,
@@ -304,14 +305,15 @@ function Library({ user, initialSearch = '', resources, loading, error, onOpenRe
                 let result = null;
 
                 if (typeToUse === 'URL' || typeToUse === 'Google Drive') {
-                  result = await analyzeUrlResource(newResourceData, freshToken);
+                  result = await analyzeUrlResource({ ...newResourceData, id: newResourceId }, freshToken);
                 } else {
-                  result = await analyzeResource(newResourceData, freshToken); // Text/Note/Document
+                  result = await analyzeResource({ ...newResourceData, id: newResourceId }, freshToken); // Text/Note/Document
                 }
 
                 if (result && onUpdateResource) {
                   await onUpdateResource(newResourceId, {
-                    aiSummary:              result.summary,
+                    _serverSaved: result._persisted,
+                aiSummary:              result.summary,
                     aiCategory:             result.category,
                     aiTags:                 result.tags,
                     aiImportantInformation: result.importantInformation,

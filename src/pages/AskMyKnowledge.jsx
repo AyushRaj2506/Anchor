@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { searchKnowledge } from '../services/relevance';
 import { askQuestion } from '../services/ai';
 import { auth } from '../services/auth';
+import { getRecord } from '../services/database';
 import './AskMyKnowledge.css';
 
 /**
@@ -107,7 +108,7 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
     const hasTasks     = context.tasks     && context.tasks.length     > 0;
 
     // Short-circuit: no relevant context found locally
-    if (!hasResources && !hasTasks) {
+    if (user?.isDemo && !hasResources && !hasTasks) {
       setTimeout(() => {
         setIsTyping(false);
         setMessages(prev => [...prev, {
@@ -152,16 +153,16 @@ function AskMyKnowledge({ resources = [], tasks = [], onOpenResource, onNavigate
       setIsTyping(false);
 
       // Map validated source IDs back to full local objects
-      const resolvedSources = (response.sources || []).map(src => {
+      const resolvedSources = (await Promise.all((response.sources || []).map(async src => {
         if (src.type === 'resource') {
-          const found = resources.find(r => r.id?.toString() === src.id?.toString());
+          const found = resources.find(r => r.id?.toString() === src.id?.toString()) || await getRecord('resources', user.uid, src.id).catch(() => null);
           if (found) return { ...src, original: found, sourceType: 'resource' };
         } else if (src.type === 'task') {
-          const found = tasks.find(t => t.id?.toString() === src.id?.toString());
+          const found = tasks.find(t => t.id?.toString() === src.id?.toString()) || await getRecord('tasks', user.uid, src.id).catch(() => null);
           if (found) return { ...src, original: found, sourceType: 'task' };
         }
         return null;
-      }).filter(Boolean);
+      }))).filter(Boolean);
 
       setMessages(prev => [...prev, {
         id:      'a-' + Date.now(),

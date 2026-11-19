@@ -9,6 +9,7 @@ dotenv.config({ path: ['.env.local', '.env'], quiet: true });
 const endpoints = new Set([
   '/api/ai/analyze', '/api/ai/analyze-url', '/api/ai/analyze-resource', '/api/ai/ask',
   '/api/storage/create-upload-url', '/api/storage/create-download-url', '/api/storage/delete-file',
+  '/api/jobs/create', '/api/jobs/status', '/api/jobs/run', '/api/maintenance/run',
 ]);
 
 const apiMiddleware = (req, res, next) => {
@@ -35,6 +36,7 @@ const apiMiddleware = (req, res, next) => {
       const handlerPath = path.resolve(process.cwd(), '.' + pathname + '.js');
       const { default: handler } = await import(pathToFileURL(handlerPath).href);
       const response = {
+        setHeader(name, value) { res.setHeader(name, value); },
         status(code) { res.statusCode = code; return response; },
         json(data) { res.end(JSON.stringify(data)); return response; },
       };

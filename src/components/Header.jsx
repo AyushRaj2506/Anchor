@@ -53,6 +53,7 @@ function Header({
     tasks:              'Tasks',
     ask:                'Ask My Knowledge',
     bookmarks:          'Bookmarks',
+    activity:           'Analysis Activity',
     'resource-details': 'Resource Details',
     'ai-test':          'AI Test',
   };

@@ -12,9 +12,29 @@ function record(row, kind) {
 }
 async function list(kind, userId) {
   if (!userId) throw new Error('A user is required.');
-  const { data, error } = await client().from(kind).select('*').eq('user_id', userId).order('created_at', { ascending: false });
+  const records = [];
+  let cursor = null;
+  do {
+    const page = await getRecordPage(kind, userId, cursor);
+    records.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return records;
+}
+export async function getRecordPage(kind, userId, cursor = null, pageSize = 50) {
+  const { data, error } = await client().rpc('anchor_page_records', {
+    record_kind: kind, owner_id: userId, page_size: pageSize,
+    cursor_created: cursor?.createdAt || null, cursor_id: cursor?.id || null,
+  });
   if (error) throw error;
-  return data.map(row => record(row, kind));
+  const last = data.at(-1);
+  return { items: data.map(row => record(row, kind)), nextCursor: data.length === pageSize ? { createdAt: last.created_at, id: last.id } : null };
+}
+export async function getRecord(kind, userId, id) {
+  if (!['resources', 'tasks'].includes(kind) || !userId || !id) throw new Error('Invalid record request.');
+  const { data, error } = await client().from(kind).select('*').eq('user_id', userId).eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? record(data, kind) : null;
 }
 async function add(kind, userId, data, id = crypto.randomUUID()) {
   if (!userId) throw new Error('A user is required.');

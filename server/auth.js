@@ -1,6 +1,8 @@
+import { INTERNAL_JOB } from './usage.js';
 import { getAuthClient } from './clients.js';
 
 export async function verifyAuth(req) {
+  if (req[INTERNAL_JOB]) return { uid: req[INTERNAL_JOB].user_id };
   const header = req.headers?.authorization;
   const token = typeof header === 'string' && /^Bearer\s+(\S+)$/i.exec(header)?.[1];
   if (!token) throw new Error('UNAUTHORIZED');

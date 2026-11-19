@@ -1,3 +1,4 @@
+import { requireAIBudget } from '../../server/usage.js';
 import { fetchPublicText } from '../../server/url.js';
 import { requireAuth } from '../../server/auth.js';
 import { generateAIContent, getAIModel, getThinkingConfig, sendAIError, withTimeout, parseAIResponse, validateAnalysis } from '../../server/clients.js';
@@ -9,6 +10,7 @@ export default async function handler(req, res) {
   if (!validBody(req, res)) return;
   const authenticatedUser = await requireAuth(req, res);
   if (!authenticatedUser) return;
+  if (!await requireAIBudget(req, res, authenticatedUser, 2)) return;
 
   const { url, title, description, category, tags } = req.body || {};
 

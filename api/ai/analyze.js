@@ -1,3 +1,4 @@
+import { requireAIBudget } from '../../server/usage.js';
 import { requireAuth } from '../../server/auth.js';
 import { generateAIContent, getAIModel, getThinkingConfig, sendAIError, withTimeout, parseAIResponse, validateAnalysis } from '../../server/clients.js';
 import { validBody } from '../../server/validation.js';
@@ -10,6 +11,7 @@ export default async function handler(req, res) {
   if (!validBody(req, res)) return;
   const authenticatedUser = await requireAuth(req, res);
   if (!authenticatedUser) return;
+  if (!await requireAIBudget(req, res, authenticatedUser, 1)) return;
 
   try {
     let textToAnalyze = '';

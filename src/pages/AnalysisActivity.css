@@ -1,0 +1,11 @@
+.analysis-activity { max-width: 1000px; margin: 0 auto; padding: 28px; color: var(--color-text-primary); }
+.activity-heading { display: flex; gap: 24px; justify-content: space-between; align-items: flex-start; }
+.analysis-activity p { color: var(--color-text-secondary); line-height: 1.6; }
+.activity-list { list-style: none; padding: 0; display: grid; gap: 16px; }
+.activity-list li { padding: 20px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface, var(--color-bg)); }
+.activity-list li > div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.activity-list time { display: block; margin-top: 12px; font-size: .85rem; color: var(--color-text-secondary); }
+.activity-status { font-size: .85rem; font-weight: 600; }
+.activity-failed { color: var(--color-danger, #b43232); }
+.activity-succeeded { color: var(--color-success, #18774b); }
+@media (max-width: 600px) { .analysis-activity { padding: 16px; } .activity-heading { flex-direction: column; gap: 8px; } }

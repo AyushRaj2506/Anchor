@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   BookOpen,
   CheckSquare,
+  Activity,
   MessageCircle,
   Bookmark,
   LogOut,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { id: 'tasks',     label: 'Tasks',            Icon: CheckSquare     },
   { id: 'ask',       label: 'Ask My Knowledge', Icon: MessageCircle   },
   { id: 'bookmarks', label: 'Bookmarks',        Icon: Bookmark        },
+  { id: 'activity', label: 'Analysis Activity', Icon: Activity },
 ];
 
 function Sidebar({ activePage, onNavigate, isOpen, onClose, user, onLogout, collapsed, onToggleCollapse }) {

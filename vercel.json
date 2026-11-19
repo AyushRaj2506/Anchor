@@ -3,6 +3,12 @@
   "functions": {
     "api/ai/*.js": {
       "maxDuration": 120
+    },
+    "api/jobs/run.js": {
+      "maxDuration": 150
+    },
+    "api/storage/create-download-url.js": {
+      "maxDuration": 30
     }
   },
   "headers": [

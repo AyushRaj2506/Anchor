@@ -123,6 +123,7 @@ function ResourceDetails({ user, resource, onBack, onToggleBookmark, onDeleteRes
       try {
         if (onUpdateResource) {
           await onUpdateResource(id, {
+            _serverSaved: result._persisted,
             aiSummary:             result.summary,
             aiCategory:            result.category,
             aiTags:                result.tags,

@@ -1,3 +1,5 @@
+import { inspectBlob } from '../../server/inspection.js';
+import { requireAIBudget } from '../../server/usage.js';
 import { requireAuth } from '../../server/auth.js';
 import { generateAIContent, getAIModel, getThinkingConfig, sendAIError, getStorageClient, withTimeout, parseAIResponse, validateAnalysis } from '../../server/clients.js';
 import { validBody, isOwnedPath } from '../../server/validation.js';
@@ -15,7 +17,7 @@ const SUPPORTED_MIME_TYPES = new Set([
 /**
  * POST /api/ai/analyze-resource
  *
- * Authenticated endpoint: verifies Firebase ID token, validates that
+ * Authenticated endpoint: verifies Supabase access token, validates that
  * storagePath belongs to the authenticated uid, fetches the actual file
  * from Supabase, passes it inline to Gemini for deep document analysis,
  * and returns structured JSON.
@@ -26,6 +28,7 @@ export default async function handler(req, res) {
   if (!validBody(req, res)) return;
   const authenticatedUser = await requireAuth(req, res);
   if (!authenticatedUser) return;
+  if (!await requireAIBudget(req, res, authenticatedUser, 4)) return;
 
   const { uid } = authenticatedUser;
 
@@ -86,8 +89,8 @@ export default async function handler(req, res) {
     }
 
     // ── 8. Convert to base64 ─────────────────────────────────────────
-    const arrayBuffer = await fileData.arrayBuffer();
-    const base64Data  = Buffer.from(arrayBuffer).toString('base64');
+    const inspected = await inspectBlob(fileData, fileType, storagePath);
+    const base64Data = inspected.bytes.toString('base64');
 
     // ── 9. Build Gemini prompt ────────────────────────────────────────
     const systemInstruction = `
@@ -179,6 +182,7 @@ Return ONLY valid JSON matching this EXACT schema:
     return res.status(200).json({ success: true, data: validatedData });
 
   } catch (error) {
+    if ([413, 422].includes(error.status)) return res.status(error.status).json({ success: false, error: error.message });
     console.error('AI request failed:', error.status || error.name);
     return sendAIError(res, error);
   }

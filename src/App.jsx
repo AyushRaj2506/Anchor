@@ -12,6 +12,7 @@ const AskMyKnowledge = lazy(() => import('./pages/AskMyKnowledge'));
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
 const DemoAccount = lazy(() => import('./pages/DemoAccount'));
+const AnalysisActivity = lazy(() => import('./pages/AnalysisActivity'));
 import { LIBRARY_RESOURCES } from './data/libraryData';
 import { TASKS } from './data/taskData';
 import { subscribeAuth, signOut, auth } from './services/auth';
@@ -292,11 +293,13 @@ function App() {
     const owner = sessionKey;
     const saved = { ...updates };
     const local = { ...updates };
+    delete saved._serverSaved;
+    delete local._serverSaved;
     if (updates.aiSummary !== undefined) {
       saved.aiAnalyzedAt = new Date().toISOString();
       local.aiAnalyzedAt = new Date();
     }
-    if (!user.isDemo) await updateResource(user.uid, resourceId, saved);
+    if (!user.isDemo && !updates._serverSaved) await updateResource(user.uid, resourceId, saved);
     if (sessionRef.current === owner) {
       setResources(prev => prev.map(r => r.id === resourceId ? { ...r, ...local } : r));
     }
@@ -419,6 +422,12 @@ function App() {
   // Render the correct authenticated page component
   function renderPage() {
     switch (activePage) {
+      case 'activity':
+        return <AnalysisActivity user={user} onResults={async () => {
+          const owner = sessionKey;
+          const [nextResources, nextTasks] = await Promise.all([getResources(uid), getTasks(uid)]);
+          if (sessionRef.current === owner) { setResources(nextResources); setTasks(nextTasks); }
+        }} />;
       case 'dashboard':
         return (
           <Dashboard

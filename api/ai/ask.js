@@ -1,3 +1,6 @@
+import { inspectBlob } from '../../server/inspection.js';
+import { loadKnowledge } from '../../server/knowledge.js';
+import { requireAIBudget } from '../../server/usage.js';
 import { requireAuth } from '../../server/auth.js';
 import { generateAIContent, getAIModel, getThinkingConfig, sendAIError, getStorageClient, withTimeout, parseAIResponse } from '../../server/clients.js';
 import { validBody, isOwnedPath } from '../../server/validation.js';
@@ -16,9 +19,11 @@ export default async function handler(req, res) {
   if (!validBody(req, res)) return;
   const authenticatedUser = await requireAuth(req, res);
   if (!authenticatedUser) return;
+  if (!await requireAIBudget(req, res, authenticatedUser, 1)) return;
 
   try {
-    const { question, context } = req.body;
+    const { question, context: suppliedContext } = req.body;
+    let context = suppliedContext;
 
     // 1. Validate Input Question
     if (question === undefined || question === null || typeof question !== 'string') {
@@ -52,6 +57,9 @@ export default async function handler(req, res) {
       || ['content', 'contentText', 'notes', 'description', 'category', 'aiSummary'].some(field => item[field] != null && typeof item[field] !== 'string'))) {
       return res.status(400).json({ success: false, error: 'Knowledge context contains invalid entries.' });
     }
+
+    // Never accept browser-supplied source text, titles or paths as evidence.
+    context = await loadKnowledge(authenticatedUser.uid, question);
 
     // 3. Check configuration
     if (!process.env.GEMINI_API_KEY) {
@@ -150,8 +158,8 @@ ${formattedTasks || 'No tasks found in context.'}
             .download(r.storagePath);
 
           if (!downloadError && fileData && fileData.size <= FILE_SIZE_LIMIT_BYTES) {
-            const arrayBuffer = await fileData.arrayBuffer();
-            const base64Data  = Buffer.from(arrayBuffer).toString('base64');
+            const inspected = await inspectBlob(fileData, r.fileType, r.storagePath);
+            const base64Data = inspected.bytes.toString('base64');
 
             parts.push({
               inlineData: {

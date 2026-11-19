@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 coverage/
+supabase/.temp/
 lighthouse-report.json
 *.local
 .env

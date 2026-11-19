@@ -38,7 +38,7 @@ export async function analyzeResource(resource, idToken) {
     tags: Array.isArray(resource.tags) ? resource.tags : []
   };
 
-  return fetchAI('/api/ai/analyze', { resource: cleanedResource }, idToken);
+  return fetchAI('/api/ai/analyze', { resource: cleanedResource, resourceId: resource.id || resource.resourceId }, idToken);
 }
 
 /**
@@ -70,6 +70,7 @@ export async function analyzeResourceFile({ resourceId, storagePath, fileType, f
 export async function analyzeUrlResource(resource, idToken = null) {
   // Clean resource to send only required fields
   const cleanedResource = {
+    resourceId: resource.id || resource.resourceId,
     url: resource.sourceUrl || resource.url || '',
     title: resource.title || '',
     description: resource.description || '',
@@ -93,6 +94,7 @@ async function fetchAI(url, payload, idToken = null) {
     if (idToken) {
       headers['Authorization'] = `Bearer ${idToken}`;
     }
+    if (url !== '/api/ai/ask') return await queueAnalysis(url, payload, idToken);
     const response = await fetch(url, {
       method: 'POST',
       headers,
@@ -120,4 +122,25 @@ async function fetchAI(url, payload, idToken = null) {
     console.error('AI Fetch error:', error);
     throw new Error('AI analysis is temporarily unavailable due to a network error.');
   }
+}
+
+async function jobRequest(url, body, token) {
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+  const result = await response.json();
+  if (!response.ok || !result.success) throw new Error(result.error || 'Analysis request failed.');
+  return result.data;
+}
+async function queueAnalysis(url, payload, token) {
+  const kind = url.endsWith('analyze-resource') ? 'file' : url.endsWith('analyze-url') ? 'url' : 'text';
+  const job = await jobRequest('/api/jobs/create', { kind, payload: { ...payload, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }, requestId: crypto.randomUUID() }, token);
+  const deadline = Date.now() + 10 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    // Obtain a fresh token on each poll so long jobs survive token expiry.
+    const { getAccessToken } = await import('./auth');
+    const status = await jobRequest('/api/jobs/status', { id: job.id }, await getAccessToken());
+    if (status.status === 'succeeded') return { ...status.result, _persisted: Boolean(payload.resourceId) };
+    if (status.status === 'failed') throw new Error(status.error || 'Analysis failed. Please retry.');
+  }
+  throw new Error('Analysis is still running. Check Analysis Activity for its status.');
 }

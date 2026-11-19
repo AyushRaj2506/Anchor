@@ -75,9 +75,13 @@ Cross-provider file/metadata operations still need failure handling: PostgreSQL 
 
 All AI routes require a verified Supabase token. Gemini runs server-side. Text, public-URL content and actual supported file bytes can be analyzed. JSON mode is followed by application-level shape/size validation. A configured fallback model can be tried once for quota/unavailability within the remaining request budget.
 
-Large-file generation has a 90-second budget, client requests allow 110 seconds, and AI functions allow 120 seconds. URL retrieval blocks private/reserved addresses, validates redirects, pins approved IPs and bounds time/body size. Protected or JavaScript-only pages can remain unreadable.
+Analysis is queued in Supabase and processed by an authenticated Vercel worker. Results and generated tasks are saved transactionally, even when the browser closes. Analysis Activity shows recent jobs. Large-file generation has a 90-second budget and the worker allows 150 seconds. URL retrieval blocks private/reserved addresses, validates redirects, pins approved IPs and bounds time/body size. Protected or JavaScript-only pages can remain unreadable.
 
-Knowledge retrieval uses weighted lexical matching, not an embeddings database. Context is bounded to eight resources and eight tasks; at most two owned supported files may be attached. Source IDs are validated against supplied context. Current context text is client-supplied; server-owned document retrieval would strengthen provenance.
+Knowledge retrieval uses indexed Postgres full-text search against the authenticated owner's saved records. Browser-supplied source text and paths are discarded. Context is bounded to eight resources and eight tasks; at most two owned supported files may be attached. Citations are validated against server-retrieved records. This is lexical retrieval; there is no embeddings database.
+
+AI usage is reserved atomically: 10 requests per minute and 100 credits per UTC day per user. Text and questions cost 1 credit, URL analysis 2, files 4. A queued job reserves once, including up to three bounded attempts. New uploads are tracked; an hourly worker removes only unreferenced tracked uploads older than 48 hours. Downloads and AI attachments check actual file signatures and declared upload size/type. Optional private ClamAV scanning fails closed when configured.
+
+Resource/task reads use stable database cursors in batches of 50, avoiding Supabase's default 1,000-row response cap. Global dashboard/search views currently collect these batches into a complete snapshot so their counts remain accurate; the library's visible-card pagination is still local. This is not a fully lazy dashboard for very large accounts.
 
 ## Verification
 
@@ -102,4 +106,4 @@ npm run test:integration
 
 Vercel's build configuration contains only the public project URL and anonymous key. Server secrets remain in environment settings. A Supabase-only build no longer needs the earlier Firebase require-ESM workaround.
 
-See [Supabase migration notes](docs/SUPABASE_MIGRATION.md) for import/rollback details and [the historical audit](docs/AUDIT.md) for earlier repair work. Existing local PDF documentation describes the previous Firebase/Supabase architecture and predates this migration.
+See [production hardening and operation](docs/PRODUCTION_HARDENING.md), [Supabase migration notes](docs/SUPABASE_MIGRATION.md) for import/rollback details and [the historical audit](docs/AUDIT.md) for earlier repair work.
